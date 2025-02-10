@@ -8,7 +8,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import javax.annotation.Resource;
 
-//@Configuration
+@Configuration
 public class MvcConfig implements WebMvcConfigurer {
 
     @Resource
@@ -20,21 +20,21 @@ public class MvcConfig implements WebMvcConfigurer {
 
         // 登录拦截器
         registry.addInterceptor(new LoginInterceptor(stringRedisTemplate))
-                .order(1)
+                .order(0)
                 .addPathPatterns(
-                        "/file/test/**",
-                        "/picture/**",
-                        "/space/**",
-                        "/user/**"
+                        "/api/file/test/**",
+                        "/api/picture/**",
+                        "/api/space/**",
+                        "/api/user/**"
                 )
                 .excludePathPatterns(
-                        "/health",
-                        "/user/login",
-                        "/user/register",
-                        "/picture/tag_category",
-                        "/picture/list/page/vo",
-                        "/picture/get/vo",
-                        "/space/list/level"
+                        "/api/health",
+                        "/api/user/login",
+                        "/api/user/register",
+                        "/api/picture/tag_category",
+                        "/api/picture/list/page/vo",
+                        "/api/picture/get/vo",
+                        "/api/space/list/level"
                 );
 
     }

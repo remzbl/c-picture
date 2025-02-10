@@ -1,5 +1,8 @@
 package com.remzbl.cpictureback.model.dto.user;
 
+import lombok.Data;
+
+@Data
 public class RedisUser {
 
 
@@ -13,11 +16,6 @@ public class RedisUser {
      */
     private String userName;
 
-
-    /**
-     * 用户头像
-     */
-    private String userAvatar;
 
 
 }

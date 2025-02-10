@@ -3,6 +3,7 @@ package com.remzbl.cpictureback.utils.interceptor;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.remzbl.cpictureback.model.dto.user.RedisUser;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.HandlerInterceptor;
 
@@ -13,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 
 import static com.remzbl.cpictureback.constant.RedisConstants.LOGIN_USER_KEY;
 import static com.remzbl.cpictureback.constant.RedisConstants.LOGIN_USER_TTL;
-
+@Slf4j
 public class LoginInterceptor implements HandlerInterceptor {
 
     private StringRedisTemplate stringRedisTemplate;
@@ -31,6 +32,7 @@ public class LoginInterceptor implements HandlerInterceptor {
      * @return
      * @throws Exception
      */
+
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         // 1.获取请求头中的token
@@ -54,6 +56,11 @@ public class LoginInterceptor implements HandlerInterceptor {
         UserHolder.saveUser(redisUser);
         // 7.刷新token有效期
         stringRedisTemplate.expire(key, LOGIN_USER_TTL, TimeUnit.MINUTES);
+
+
+        log.debug("请求路径：{}，获取到Token：{}", request.getRequestURI(), token);
+        log.debug("从Redis获取用户：{}", redisUser);
+
         // 8.放行
         return true;
     }
@@ -67,13 +74,13 @@ public class LoginInterceptor implements HandlerInterceptor {
      * @param ex
      * @throws Exception
      */
-    @Override
-    public void afterCompletion(HttpServletRequest request,
-                                HttpServletResponse response,
-                                Object handler, Exception ex) throws Exception {
-
-        UserHolder.removeUser();
-
-    }
+//    @Override
+//    public void afterCompletion(HttpServletRequest request,
+//                                HttpServletResponse response,
+//                                Object handler, Exception ex) throws Exception {
+//
+//        UserHolder.removeUser();
+//
+//    }
 
 }
