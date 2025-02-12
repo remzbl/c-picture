@@ -16,6 +16,7 @@ import com.remzbl.cpictureback.model.vo.LoginUserVO;
 import com.remzbl.cpictureback.model.vo.UserVO;
 import com.remzbl.cpictureback.service.UserService;
 import com.remzbl.cpictureback.utils.interceptor.UserHolder;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +24,7 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
+@Slf4j
 @RestController  // 将返回值自动转化为JSON格式数据
 @RequestMapping("/user")
 public class UserController {
@@ -75,6 +77,7 @@ public class UserController {
      */
     @PostMapping("/logout")
     public BaseResponse<Boolean> userLogout() {
+        log.info("从UserHolder获取用户：{}", UserHolder.getUser());
         ThrowUtils.throwIf(UserHolder.getUser() == null, ErrorCode.PARAMS_ERROR);
         boolean result = userService.userLogout();
         return ResultUtils.success(result);
