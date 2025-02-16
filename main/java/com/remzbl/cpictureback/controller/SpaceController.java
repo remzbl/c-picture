@@ -105,13 +105,11 @@ public class SpaceController {
      * 更新空间（仅管理员可用）
      *
      * @param spaceUpdateRequest
-     * @param request
      * @return
      */
     @PostMapping("/update")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Boolean> updateSpace(@RequestBody SpaceUpdateRequest spaceUpdateRequest,
-                                             HttpServletRequest request) {
+    public BaseResponse<Boolean> updateSpace(@RequestBody SpaceUpdateRequest spaceUpdateRequest) {
         if (spaceUpdateRequest == null || spaceUpdateRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -137,7 +135,7 @@ public class SpaceController {
      */
     @GetMapping("/get")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    public BaseResponse<Space> getSpaceById(long id, HttpServletRequest request) {
+    public BaseResponse<Space> getSpaceById(long id) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
         // 查询数据库
         Space space = spaceService.getById(id);
@@ -150,13 +148,13 @@ public class SpaceController {
      * 根据 id 获取空间（封装类）
      */
     @GetMapping("/get/vo")
-    public BaseResponse<SpaceVO> getSpaceVOById(long id, HttpServletRequest request) {
+    public BaseResponse<SpaceVO> getSpaceVOById(long id) {
         ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
         // 查询数据库
         Space space = spaceService.getById(id);
         ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR);
         // 获取封装类
-        return ResultUtils.success(spaceService.getSpaceVO(space, request));
+        return ResultUtils.success(spaceService.getSpaceVO(space));
     }
 
 
@@ -164,8 +162,7 @@ public class SpaceController {
      * 分页获取空间列表（封装类）
      */
     @PostMapping("/list/page/vo")
-    public BaseResponse<Page<SpaceVO>> listSpaceVOByPage(@RequestBody SpaceQueryRequest spaceQueryRequest,
-                                                         HttpServletRequest request) {
+    public BaseResponse<Page<SpaceVO>> listSpaceVOByPage(@RequestBody SpaceQueryRequest spaceQueryRequest) {
         long current = spaceQueryRequest.getCurrent();
         long size = spaceQueryRequest.getPageSize();
         // 限制爬虫
@@ -174,7 +171,7 @@ public class SpaceController {
         Page<Space> spacePage = spaceService.page(new Page<>(current, size),
                 spaceService.getQueryWrapper(spaceQueryRequest));
         // 获取封装类
-        return ResultUtils.success(spaceService.getSpaceVOPage(spacePage, request));
+        return ResultUtils.success(spaceService.getSpaceVOPage(spacePage));
     }
 
 

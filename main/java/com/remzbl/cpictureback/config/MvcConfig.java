@@ -6,11 +6,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import javax.annotation.Resource;
 
-// MvcConfig.java
 @Configuration
 public class MvcConfig implements WebMvcConfigurer {
     @Resource
@@ -28,6 +28,22 @@ public class MvcConfig implements WebMvcConfigurer {
 //        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate))
         registry.addInterceptor(refreshTokenInterceptor)
                 .addPathPatterns("/**")
+                .excludePathPatterns(
+                        //接口文档释放
+                        "/**/webjars/**",
+                        "/**/v2/**",
+                        "/**/swagger-ui.html/**",
+                        "/**/doc.html",
+                        "/**/swagger-resources",
+                        "/**/v2/api-docs",
+
+                        //功能接口释放
+                        "/api/picture/list/page/vo",
+                        "/api/picture/list/page/vo/cache",
+                        "/api/picture/get/vo",
+                        "/api/picture/tag_category"
+
+                )
                 .order(0);
 
         // 2. 再注册登录拦截器（order=1）
@@ -40,14 +56,26 @@ public class MvcConfig implements WebMvcConfigurer {
                         "/api/user/**"
                 )
                 .excludePathPatterns(
-                        "/api/doc.html",
                         "/api/health",
                         "/api/user/login",
                         "/api/user/register",
                         "/api/picture/tag_category",
                         "/api/picture/list/page/vo",
+                        "/api/picture/list/page/vo/cache",
                         "/api/picture/get/vo",
                         "/api/space/list/level"
+
                 );
+
     }
+
+
+    public void addResourceHandlers(ResourceHandlerRegistry registry){
+        registry.addResourceHandler("swagger-ui.html")
+                .addResourceLocations("classpath:/META-INF/resources/");
+        registry.addResourceHandler("/webjars/**")
+                .addResourceLocations("classpath:/META-INF/resources/webjars/");
+    }
+
+
 }

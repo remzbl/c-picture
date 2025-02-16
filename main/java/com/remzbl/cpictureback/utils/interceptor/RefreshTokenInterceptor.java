@@ -5,6 +5,7 @@ import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.remzbl.cpictureback.exception.ErrorCode;
 import com.remzbl.cpictureback.model.dto.user.RedisUser;
+import com.remzbl.cpictureback.model.vo.PictureVO;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -53,6 +54,19 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
             log.debug("放行 OPTIONS 请求");
             return true;
         }
+
+
+        // 外面释放不让过 就在这里放行
+        // 放行 /api/picture/tag_category","/api/picture/list/page/vo","/api/picture/list/page/vo/cache",三个接口
+        if (    uri.contains("/api/picture/tag_category") ||
+                uri.contains("/api/picture/list/page/vo") ||
+                uri.contains("/api/picture/list/page/vo/cache")){
+
+            return true;
+        }
+
+
+        log.debug("{}", request.getRequestURI());
         // 1.获取请求头中的token
         log.debug("从request获取token：{}", request.getHeader("Authorization"));
 
