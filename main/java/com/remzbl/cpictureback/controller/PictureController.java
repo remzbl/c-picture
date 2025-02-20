@@ -23,6 +23,7 @@ import com.remzbl.cpictureback.model.vo.PictureVO;
 import com.remzbl.cpictureback.service.PictureService;
 import com.remzbl.cpictureback.service.SpaceService;
 import com.remzbl.cpictureback.service.UserService;
+import com.remzbl.cpictureback.utils.cacheutil.CacheUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -54,6 +55,9 @@ public class PictureController {
 
     @Resource
     private SpaceService spaceService;
+
+    @Resource
+    private CacheUtil cacheUtil;
 
     /**
      * 上传图片（可重新上传）
@@ -260,15 +264,7 @@ public class PictureController {
 
 
 
-    /**
-     * 创建本地缓存对象  设置本地缓存的缓存容量和过期时间
-     */
-    private final Cache<String, String> LOCAL_CACHE = Caffeine.newBuilder()
-            .initialCapacity(1024)
-            .maximumSize(10_000L) // 最大 10000 条
-            // 缓存 5 分钟后移除
-            .expireAfterWrite(Duration.ofMinutes(5))
-            .build();
+
 
     /**
      * 二级缓存 缓存获取图片
@@ -313,7 +309,7 @@ public class PictureController {
         String cacheKey = String.format("cpicture:listPictureVOByPage:%s", hashKey);
 
         // 1. 先从本地缓存中查询
-        String cachedValue = LOCAL_CACHE.getIfPresent(cacheKey);
+        String cachedValue = cacheUtil.getLocalCache().getIfPresent(cacheKey);
         // 断点日志测试
         log.info("cachedValue:{}",cachedValue);
         if (cachedValue!= null) {
@@ -348,7 +344,7 @@ public class PictureController {
         valueOps.set(cacheKey, cacheValue, cacheExpireTime, TimeUnit.SECONDS);
 
         // 写入本地缓存
-        LOCAL_CACHE.put(cacheKey, cacheValue);
+        cacheUtil.getLocalCache().put(cacheKey, cacheValue);
         // 返回结果
         return ResultUtils.success(pictureVOPage);
 

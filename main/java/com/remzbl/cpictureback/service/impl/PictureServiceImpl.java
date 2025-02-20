@@ -7,7 +7,6 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import com.remzbl.cpictureback.common.ResultUtils;
 import com.remzbl.cpictureback.exception.BusinessException;
 import com.remzbl.cpictureback.exception.ErrorCode;
 import com.remzbl.cpictureback.exception.ThrowUtils;
@@ -28,6 +27,7 @@ import com.remzbl.cpictureback.model.vo.UserVO;
 import com.remzbl.cpictureback.service.PictureService;
 import com.remzbl.cpictureback.service.SpaceService;
 import com.remzbl.cpictureback.service.UserService;
+import com.remzbl.cpictureback.utils.cacheutil.CacheUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -36,12 +36,9 @@ import org.jsoup.select.Elements;
 import org.springframework.beans.BeanUtils;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -76,6 +73,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     @Resource
     private TransactionTemplate transactionTemplate;
+
+    @Resource
+    private CacheUtil cacheCleanService;
 
 
 
@@ -263,7 +263,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 ThrowUtils.throwIf(!update, ErrorCode.OPERATION_ERROR, "额度更新失败");
             }
             return picture;
+
         });
+
+        cacheCleanService.cleanAllCache();
+
+        // 清理缓存
+
 
 //        // 开启事务
 //        transactionTemplate.execute(status -> {
@@ -461,6 +467,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 return true;
             });
         }
+
+        cacheCleanService.cleanAllCache();
 
         // 异步清理文件
         this.clearPictureFile(oldPicture);

@@ -1,4 +1,6 @@
 package com.remzbl.cpictureback.exception;
+
+
 public class  ThrowUtils {
     //断言式的异常处理方法
     //重载适应不同情况
