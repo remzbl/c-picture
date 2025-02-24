@@ -594,6 +594,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         //空间信息提取
         Long spaceId = pictureQueryRequest.getSpaceId();
         boolean nullSpaceId = pictureQueryRequest.isNullSpaceId();
+        //时间查询条件
+        Date startEditTime = pictureQueryRequest.getStartEditTime();
+        Date endEditTime = pictureQueryRequest.getEndEditTime();
 
 
         // 从多字段中搜索
@@ -623,6 +626,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         //查询构造器添加空间信息信息
         queryWrapper.eq(ObjUtil.isNotEmpty(spaceId), "spaceId", spaceId);
         queryWrapper.isNull(nullSpaceId, "spaceId");
+        //时间查询条件
+        queryWrapper.ge(ObjUtil.isNotEmpty(startEditTime), "editTime", startEditTime);
+        queryWrapper.lt(ObjUtil.isNotEmpty(endEditTime), "editTime", endEditTime);
 
 
         // JSON 数组查询

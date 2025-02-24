@@ -14,6 +14,7 @@ import com.remzbl.cpictureback.exception.BusinessException;
 import com.remzbl.cpictureback.exception.ErrorCode;
 import com.remzbl.cpictureback.exception.ThrowUtils;
 import com.remzbl.cpictureback.model.dto.picture.*;
+import com.remzbl.cpictureback.model.dto.user.RedisUser;
 import com.remzbl.cpictureback.model.entity.Picture;
 import com.remzbl.cpictureback.model.entity.Space;
 import com.remzbl.cpictureback.model.entity.User;
@@ -24,6 +25,7 @@ import com.remzbl.cpictureback.service.PictureService;
 import com.remzbl.cpictureback.service.SpaceService;
 import com.remzbl.cpictureback.service.UserService;
 import com.remzbl.cpictureback.utils.cacheutil.CacheUtil;
+import com.remzbl.cpictureback.utils.interceptor.UserHolder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -267,7 +269,7 @@ public class PictureController {
 
 
     /**
-     * 二级缓存 缓存获取图片
+     * 二级缓存 主页缓存获取图片
      * @param pictureQueryRequest
      * @return BaseResponse<Page<PictureVO>>
      */
@@ -296,6 +298,105 @@ public class PictureController {
             if (!loginUser.getId().equals(space.getUserId())) {
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有空间权限");
             }
+
+
+
+        }
+        //ccccc
+
+
+        // 构建缓存 key : 使用MD5将查询条件压缩为hashkey  再拼接项目前缀 组成cachekey
+        String queryCondition = JSONUtil.toJsonStr(pictureQueryRequest);
+        String hashKey = DigestUtils.md5DigestAsHex(queryCondition.getBytes());
+        String cacheKey = String.format("cpicture:listPictureVOByPage:%s", hashKey);
+
+        // 1. 先从本地缓存中查询
+        String cachedValue = cacheUtil.getLocalCache().getIfPresent(cacheKey);
+        // 断点日志测试
+        log.info("cachedValue:{}",cachedValue);
+        if (cachedValue!= null) {
+            // 如果缓存命中，返回结果
+            Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, Page.class);
+            return ResultUtils.success(cachedPage);
+        }
+
+        // 本地缓存未命中  查询Redis分布式缓存
+        ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue(); //构造操作redis数据库的对象
+        cachedValue = valueOps.get(cacheKey); //redis查询 redisKey键所对应的值
+        // 断点日志测试
+        log.info("cachedValue:{}",cachedValue);
+
+        if (cachedValue != null) {
+            // 如果缓存命中，返回结果
+            Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, Page.class); //将json字符串反序列化转化为Java对象 此处指定了java对象为Page<PictureVO>
+            return ResultUtils.success(cachedPage);
+        }
+
+        // 缓存未命中 就 查询数据库
+        // 创建原信息分页对象
+        Page<Picture> picturePage = pictureService.page(new Page<>(current, size),
+                pictureService.getQueryWrapper(pictureQueryRequest));
+        // 获取原信息分页对象
+        Page<PictureVO> pictureVOPage = pictureService.getPictureVOPage(picturePage);
+
+        // 存入 Redis 缓存
+        String cacheValue = JSONUtil.toJsonStr(pictureVOPage); //将Page<PictureVO>脱敏分页对象序列化为json字符串
+        // 5 - 10 分钟随机过期，防止雪崩
+        int cacheExpireTime = 300 +  RandomUtil.randomInt(0, 300);
+        valueOps.set(cacheKey, cacheValue, cacheExpireTime, TimeUnit.SECONDS);
+
+        // 写入本地缓存
+        cacheUtil.getLocalCache().put(cacheKey, cacheValue);
+        // 返回结果
+        return ResultUtils.success(pictureVOPage);
+
+    }
+
+
+
+    /**
+     * 二级缓存 私有图库缓存获取图片
+     * @param pictureQueryRequest
+     * @return BaseResponse<Page<PictureVO>>
+     */
+
+    @PostMapping("/list/page/vo/privatecache")
+    public BaseResponse<Page<PictureVO>> listPictureVOByPageWithprivateCache(@RequestBody PictureQueryRequest pictureQueryRequest) {
+        long current = pictureQueryRequest.getCurrent();
+        long size = pictureQueryRequest.getPageSize();
+        // 限制爬虫
+        ThrowUtils.throwIf(size > 20, ErrorCode.PARAMS_ERROR);
+        // 设置查询条件
+        // 空间权限校验 即校验查询图片是属于哪个空间
+        Long spaceId = pictureQueryRequest.getSpaceId();
+        if (spaceId == null) {
+            // 公开图库
+            // 普通用户默认只能看到审核通过的数据
+            pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+            pictureQueryRequest.setNullSpaceId(true);
+
+
+        } else {
+            // 私有空间
+//            log.info("从UserHolder获取用户：{}", UserHolder.getUser());
+//            log.info("从UserHolder获取用户：{}", UserHolder.getUser());
+//            log.info("从UserHolder获取用户：{}", UserHolder.getUser());
+//            log.info("从UserHolder获取用户：{}", UserHolder.getUser());
+//            log.info("从UserHolder获取用户：{}", UserHolder.getUser());
+//            RedisUser currentUser = UserHolder.getUser();
+//            Long loginUser= currentUser.getId();
+
+            User loginUser = userService.getLoginUser();
+            Space space = spaceService.getById(spaceId);
+            ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
+            if (!loginUser.getId().equals(space.getUserId())) {
+                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有空间权限");
+            }
+
+
+//            if (!loginUser.getId().equals(space.getUserId())) {
+//                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有空间权限");
+//            }
 
 
 

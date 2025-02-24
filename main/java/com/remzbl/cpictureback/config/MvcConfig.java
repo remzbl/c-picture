@@ -1,3 +1,4 @@
+
 package com.remzbl.cpictureback.config;
 
 import com.remzbl.cpictureback.utils.interceptor.LoginInterceptor;
@@ -27,7 +28,13 @@ public class MvcConfig implements WebMvcConfigurer {
         // 1. 先注册 Token 刷新拦截器（order=0）
 //        registry.addInterceptor(new RefreshTokenInterceptor(stringRedisTemplate))
         registry.addInterceptor(refreshTokenInterceptor)
-                .addPathPatterns("/**")
+
+                .order(0)
+                .addPathPatterns(
+                        "/**"
+//                        "/api/picture/list/page/vo/privatecache",
+//                        "/api/**"
+                )
                 .excludePathPatterns(
                         //接口文档释放
                         "/**/webjars/**",
@@ -43,29 +50,57 @@ public class MvcConfig implements WebMvcConfigurer {
                         "/api/picture/get/vo",
                         "/api/picture/tag_category"
 
-                )
-                .order(0);
+                );
 
         // 2. 再注册登录拦截器（order=1）
-        registry.addInterceptor(new LoginInterceptor())
+        registry.addInterceptor(loginInterceptor)
                 .order(1)
                 .addPathPatterns(
-                        "/api/file/test/**",
-                        "/api/picture/**",
-                        "/api/space/**",
-                        "/api/user/**"
-                )
-                .excludePathPatterns(
-                        "/api/health",
-                        "/api/user/login",
-                        "/api/user/register",
-                        "/api/picture/tag_category",
+////                      "/api/file/test/**",
+//                        "/api/picture/**",
+//                        //"/api/space/**",
+//                        "/api/user/**",
+//                        "/api/picture/list/page/vo/privatecache",
+
+                        "/api/picture/upload",
+                        "/api/picture/upload/url",
+                        "/api/picture/upload/batch",
+                        "/api/picture/delete",
+                        "/api/picture/edit",
+                        "/api/picture/update",
+                        "/api/picture/get/vo",
                         "/api/picture/list/page/vo",
                         "/api/picture/list/page/vo/cache",
-                        "/api/picture/get/vo",
-                        "/api/space/list/level"
+                        "/api/picture/list/page/vo/privatecache",
+                        "/api/picture/review",
+
+
+
+                        "/api/space/add",
+                        "/api/space/delete",
+                        "/api/space/edit",
+
+
+                        "/api/user/get/login",
+                        "/api/space/add",
+                        "/api/space/add"
+
+
+
 
                 );
+//                .excludePathPatterns(
+//                        "/api/health",
+//                        "/api/user/login",
+//                        "/api/user/register",
+//                        "/api/picture/tag_category",
+//                        "/api/picture/list/page/vo",
+//                        "/api/picture/list/page/vo/cache",
+//                        //"/api/picture/get/vo",
+//                        "/api/space/**",
+//                        "/api/space/list/level"
+//
+//                );
 
     }
 

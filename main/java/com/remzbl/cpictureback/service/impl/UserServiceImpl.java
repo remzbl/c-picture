@@ -40,6 +40,8 @@ import java.util.stream.Collectors;
 import static com.remzbl.cpictureback.constant.RedisConstants.LOGIN_USER_KEY;
 import static com.remzbl.cpictureback.constant.RedisConstants.LOGIN_USER_TTL;
 
+
+
 /**
  * @author remzbl
  * @description 针对表【user(用户)】的数据库操作Service实现
@@ -157,6 +159,31 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         //Object userObj = request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE);
         RedisUser currentUser = UserHolder.getUser();
+        log.info("从UserHolder获取用户6：{}", UserHolder.getUser());
+        log.info("从UserHolder获取用户7：{}", UserHolder.getUser());
+        log.info("从UserHolder获取用户8：{}", UserHolder.getUser());
+        log.info("从UserHolder获取用户9：{}", UserHolder.getUser());
+        log.info("从UserHolder获取用户10：{}", UserHolder.getUser());
+
+        // 日志记录当前方法调用的父方法信息
+
+//        String zong = Thread.currentThread().getStackTrace()[2].getMethodName();
+//        String zong1 = Thread.currentThread().getStackTrace()[3].getMethodName();
+//        String zong2 = Thread.currentThread().getStackTrace()[4].getMethodName();
+//        log.info("尝试获取父信息：{}", zong);
+//        log.info("尝试获取父信息：{}", zong);
+//        log.info("尝试获取父信息：{}", zong);
+//        log.info("尝试获取父信息：{}", zong1);
+//        log.info("尝试获取父信息：{}", zong1);
+//        log.info("尝试获取父信息：{}", zong1);
+//        log.info("尝试获取父信息：{}", zong2);
+//        log.info("尝试获取父信息：{}", zong2);
+//        log.info("尝试获取父信息：{}", zong2);
+
+
+
+
+
         log.info("尝试获取登录用户：{}", currentUser);
 
         if (currentUser == null || currentUser.getId() == null) {

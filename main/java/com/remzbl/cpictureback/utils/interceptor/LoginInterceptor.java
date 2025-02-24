@@ -21,9 +21,16 @@ public class LoginInterceptor implements HandlerInterceptor {
         // 直接检查 UserHolder（由 RefreshTokenInterceptor 填充）
         log.debug("检查用户是否登录{}" , UserHolder.getUser());
         if (UserHolder.getUser() == null) {
-            response.setStatus(40100000);
+            response.setStatus(40100);
             return false;
         }
+        // 日志记录当前方法调用的接口信息
+
+        log.info("拦截器2从UserHolder获取用户：{}", UserHolder.getUser());
+        log.info("拦截器2UserHolder获取用户：{}", UserHolder.getUser());
+        log.info("拦截器2UserHolder获取用户：{}", UserHolder.getUser());
+        log.info("拦截器2UserHolder获取用户：{}", UserHolder.getUser());
+        log.info("拦截器2UserHolder获取用户：{}", UserHolder.getUser());
         return true;
     }
 }

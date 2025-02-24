@@ -1,0 +1,74 @@
+#端口配置
+server:
+  port: 8123
+  servlet:
+    context-path: /api
+
+    # cookie 30 天过期
+    session:
+        cookie:
+          max-age: 2592000
+
+spring:
+  application:
+    name: c-picture-back
+  # 数据库配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver  #cj为新的数据库类  踩过坑
+    url: jdbc:mysql://localhost:3306/c_picture #自己先指定一下需要用到的数据库
+                                              #之后在创建数据库时也要创建同名的数据库
+    username: root
+    password: 137955
+
+  # Redis 配置
+  redis:
+    lettuce:
+      pool:
+        max-active: 50  # 默认8，建议根据并发调整
+        max-idle: 20
+        min-idle: 5
+    database: 0
+    host: 127.0.0.1
+    port: 6379
+    timeout: 5000
+
+  # Session 配置
+  session:
+    store-type: redis
+    # session 30 天后过期
+    timeout: 2592000
+
+  # 开放更大的文件上传体积
+  servlet:
+    multipart:
+      max-file-size: 10MB
+
+
+# 操作数据库配置
+mybatis-plus:
+  configuration:
+    # MyBatis 配置
+    map-underscore-to-camel-case: false #驼峰命名关闭
+    # 仅在开发环境打印日志
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  #逻辑删除配置
+  global-config:
+    db-config:
+      logic-delete-field: isDelete # 全局逻辑删除的实体字段名
+      logic-delete-value: 1 # 逻辑已删除值（默认为 1）
+      logic-not-delete-value: 0 # 逻辑未删除值（默认为 0）
+
+
+# 接口文档配置
+knife4j:
+  enable: true
+  openapi:
+    title: 接口文档
+    version: 1.0
+    group:
+      default:
+        api-rule: package  #指定扫描范围是一个包
+        api-rule-resources:   #指定Control层接口层包 的全类名路径
+          - com.remzbl.cpictureback.controller
+
+
