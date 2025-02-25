@@ -3,13 +3,14 @@ package com.remzbl.cpictureback.model.vo;
 import cn.hutool.json.JSONUtil;
 import com.remzbl.cpictureback.model.entity.Picture;
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-
+@Slf4j
 @Data
 public class PictureVO implements Serializable {
 
@@ -137,8 +138,16 @@ public class PictureVO implements Serializable {
         }
         PictureVO pictureVO = new PictureVO();
         BeanUtils.copyProperties(picture, pictureVO);
+        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
+        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
+        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
+        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
+        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
+        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
         // 类型不同，需要转换
         pictureVO.setTags(JSONUtil.toList(picture.getTags(), String.class));
+        // 日志记录标签转化为json格式的信息
+
         return pictureVO;
     }
 }
