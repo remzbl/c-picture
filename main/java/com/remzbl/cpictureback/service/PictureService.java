@@ -3,6 +3,9 @@ package com.remzbl.cpictureback.service;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
+
+import com.remzbl.cpictureback.api.aliyunai.model.CreateOutPaintingTaskRequest;
+import com.remzbl.cpictureback.api.aliyunai.model.CreateOutPaintingTaskResponse;
 import com.remzbl.cpictureback.model.dto.picture.*;
 import com.remzbl.cpictureback.model.entity.Picture;
 import com.remzbl.cpictureback.model.entity.User;
@@ -92,7 +95,21 @@ public interface PictureService extends IService<Picture> {
      */
     void deletePicture(Long pictureId, User loginUser);
 
+    /**
+     * 单一改 : 编辑图片
+     *
+     * @param pictureEditRequest
+     * @param loginUser
+     */
+    void editPicture(PictureEditRequest pictureEditRequest, User loginUser);
 
+    /**
+     * 批量编辑图片
+     *
+     * @param pictureEditByBatchRequest
+     * @param loginUser
+     */
+    void editPictureByBatch(PictureEditByBatchRequest pictureEditByBatchRequest, User loginUser);
 
     /**
      * 获取图片包装类（单条）
@@ -126,6 +143,12 @@ public interface PictureService extends IService<Picture> {
      */
     void doPictureReview(PictureReviewRequest pictureReviewRequest, User loginUser);
 
+    /**
+     * 创建扩图任务
+     *
+     * @param createPictureOutPaintingTaskRequest
+     * @param loginUser
+     */
+    CreateOutPaintingTaskResponse createPictureOutPaintingTask(CreatePictureOutPaintingTaskRequest createPictureOutPaintingTaskRequest, User loginUser);
 
-    void editPicture(PictureEditRequest pictureEditRequest, User loginUser);
 }

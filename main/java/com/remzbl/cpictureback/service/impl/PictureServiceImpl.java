@@ -7,6 +7,9 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.remzbl.cpictureback.api.aliyunai.AliYunAiApi;
+import com.remzbl.cpictureback.api.aliyunai.model.CreateOutPaintingTaskRequest;
+import com.remzbl.cpictureback.api.aliyunai.model.CreateOutPaintingTaskResponse;
 import com.remzbl.cpictureback.exception.BusinessException;
 import com.remzbl.cpictureback.exception.ErrorCode;
 import com.remzbl.cpictureback.exception.ThrowUtils;
@@ -76,6 +79,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     @Resource
     private CacheUtil cacheCleanService;
+
+    @Resource
+    private AliYunAiApi aliYunAiApi;
 
 
 
@@ -682,6 +688,26 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
     }
 
+
+
+    // ai扩图任务创建的参数填充
+    @Override
+    public CreateOutPaintingTaskResponse createPictureOutPaintingTask(CreatePictureOutPaintingTaskRequest createPictureOutPaintingTaskRequest, User loginUser) {
+        // 获取图片信息
+        Long pictureId = createPictureOutPaintingTaskRequest.getPictureId();
+        Picture picture = Optional.ofNullable(this.getById(pictureId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND_ERROR, "图片不存在"));
+        // 校验权限
+        checkPictureAuth(loginUser, picture);
+        // 创建扩图任务
+        CreateOutPaintingTaskRequest createOutPaintingTaskRequest = new CreateOutPaintingTaskRequest();
+        CreateOutPaintingTaskRequest.Input input = new CreateOutPaintingTaskRequest.Input();
+        input.setImageUrl(picture.getUrl());
+        createOutPaintingTaskRequest.setInput(input);
+        createOutPaintingTaskRequest.setParameters(createPictureOutPaintingTaskRequest.getParameters());
+        // 创建任务
+        return aliYunAiApi.createOutPaintingTask(createOutPaintingTaskRequest);
+    }
 
 
 
