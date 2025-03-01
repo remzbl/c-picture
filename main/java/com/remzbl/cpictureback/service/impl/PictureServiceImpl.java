@@ -546,7 +546,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
         // 对象列表 => 封装对象列表
         List<PictureVO> pictureVOList = pictureList.stream()
-                .map(PictureVO::objToVo)
+                .map(PictureVO::objToVo)  // 使用已有类 PictureVO 中的 objToVo方法
                 .collect(Collectors.toList());
 
         // 	2.1特殊的 : 关联查询用户信息

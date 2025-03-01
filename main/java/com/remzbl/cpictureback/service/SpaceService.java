@@ -18,12 +18,24 @@ import javax.servlet.http.HttpServletRequest;
 */
 
 
-/**
- * @author 李鱼皮
- * @description 针对表【space(空间)】的数据库操作Service
- * @createDate 2024-12-18 19:53:34
- */
 public interface SpaceService extends IService<Space> {
+
+
+    /**
+     * 校验空间权限
+     *
+     * @param loginUser
+     * @param space
+     */
+    void checkSpaceAuth(User loginUser, Space space);
+
+    /**
+     * 校验空间参数
+     *
+     * @param space
+     * @param add   是否为创建时检验
+     */
+    void validSpace(Space space, boolean add);
 
     /**
      * 创建空间
@@ -34,13 +46,7 @@ public interface SpaceService extends IService<Space> {
      */
     long addSpace(SpaceAddRequest spaceAddRequest, User loginUser);
 
-    /**
-     * 校验空间
-     *
-     * @param space
-     * @param add   是否为创建时检验
-     */
-    void validSpace(Space space, boolean add);
+
 
     /**
      * 获取空间包装类（单条）
