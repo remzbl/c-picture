@@ -271,41 +271,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             return picture;
 
         });
-
-        cacheCleanService.cleanAllCache();
-
         // 清理缓存
+        // todo 优化同步更新缓存 而不是直接删除
+        //cacheCleanService.cleanAllCache();
 
+        cacheCleanService.updateCacheAfterUpload(picture, pictureUploadRequest);
 
-//        // 开启事务
-//        transactionTemplate.execute(status -> {
-//
-//            boolean result = this.saveOrUpdate(picture);
-//            // 当 finalSpaceId 为 null 时，无需更新额度，默认更新成功
-//            boolean update = (finalSpaceId == null) ||
-//                    spaceService.lambdaUpdate()
-//                            .eq(Space::getId, finalSpaceId)
-//                            .setSql("totalSize = totalSize + " + picture.getPicSize())
-//                            .setSql("totalCount = totalCount + 1")
-//                            .update();
-//
-//            if (!result || !update) {
-//                // 注册事务回滚后的清理操作
-//                TransactionSynchronizationManager.registerSynchronization(
-//                        new TransactionSynchronization() {
-//                            @Override
-//                            public void afterCompletion(int status) {
-//                                if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
-//                                    clearPictureFile(picture); // 仅在回滚时清理
-//                                }
-//                            }
-//                        });
-//                // 抛出异常触发事务回滚
-//                String errorMessage = !result ? "图片保存失败" : "额度更新失败";
-//                throw new BusinessException(ErrorCode.OPERATION_ERROR, errorMessage);
-//            }
-//            return picture;
-//        });
 
 
         return PictureVO.objToVo(picture);
@@ -378,6 +349,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 break;
             }
         }
+
+        // 清理缓存
+        // todo 优化同步更新缓存 而不是直接删除
+        // cacheCleanService.cleanAllCache();
+        // 同步更新缓存
+        cacheCleanService.cleanAllCache();
+
         return uploadCount;
     }
 
@@ -437,8 +415,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     /**
      * 删除图片
-     * @param pictureId
-     * @param loginUser
+
      */
     @Override
     public void deletePicture(Long pictureId, User loginUser) {
@@ -510,12 +487,86 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
         // 操作数据库
         boolean result = this.updateById(picture);
+        // todo 优化同步更新缓存 而不是直接删除
+        cacheCleanService.cleanAllCache();
+
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
 
 
     }
 
+    //批量改1 : 循环遍历需要修改的图片 再进行修改
+    // todo 优化方向 : 线程池
+    @Override
+    public void editPictureByBatch(PictureEditByBatchRequest pictureEditByBatchRequest, User loginUser) {
+        // 1. 获取和校验参数
+        List<Long> pictureIdList = pictureEditByBatchRequest.getPictureIdList();
+        Long spaceId = pictureEditByBatchRequest.getSpaceId();
+        String category = pictureEditByBatchRequest.getCategory();
+        List<String> tags = pictureEditByBatchRequest.getTags();
+        ThrowUtils.throwIf(CollUtil.isEmpty(pictureIdList), ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(spaceId == null, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.NO_AUTH_ERROR);
+        // 2. 校验空间权限
+        Space space = spaceService.getById(spaceId);
+        ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
+        if (!space.getUserId().equals(loginUser.getId())) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有空间访问权限");
+        }
+        // 3. 查询指定图片（仅选择需要的字段）
+        List<Picture> pictureList = this.lambdaQuery()
+                .select(Picture::getId, Picture::getSpaceId)
+                .eq(Picture::getSpaceId, spaceId)
+                .in(Picture::getId, pictureIdList)
+                .list();
+        if (pictureList.isEmpty()) {
+            return;
+        }
+        // 4. 更新分类和标签
+        pictureList.forEach(picture -> {
+            if (StrUtil.isNotBlank(category)) {
+                picture.setCategory(category);
+            }
+            if (CollUtil.isNotEmpty(tags)) {
+                picture.setTags(JSONUtil.toJsonStr(tags));
+            }
+        });
+        // 批量重命名
+        String nameRule = pictureEditByBatchRequest.getNameRule();
+        fillPictureWithNameRule(pictureList, nameRule);
+        // 5. 操作数据库进行批量更新
+        boolean result = this.updateBatchById(pictureList);
 
+        // todo 优化同步更新缓存 而不是直接删除
+        cacheCleanService.cleanAllCache();
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "批量编辑失败");
+    }
+
+    //批量改工具 - 名称批量修改
+    /**
+     * nameRule 格式：图片{序号}
+     */
+    private void fillPictureWithNameRule(List<Picture> pictureList, String nameRule) {
+        if (StrUtil.isBlank(nameRule) || CollUtil.isEmpty(pictureList)) {
+            return;
+        }
+        long count = 1;
+        try {
+            for (Picture picture : pictureList) {
+                String pictureName = nameRule.replaceAll("\\{序号}", String.valueOf(count++));
+                picture.setName(pictureName);
+            }
+        } catch (Exception e) {
+            log.error("名称解析错误", e);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "名称解析错误");
+        }
+    }
+
+
+
+    // 查
+
+    // 这里是页面分页显示图片信息(脱敏信息)第一步 : 原图片信息脱敏转化 + 关联图片上传用户的脱敏信息
     @Override
     public PictureVO getPictureVO(Picture picture) {
         // 对象转封装类
@@ -530,6 +581,95 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         return pictureVO;
     }
 
+    // 分页查询的返回信息就是Page对象
+    // 图片管理页面的图片查询也需要用到这里的方法
+    //这里是页面分页显示图片信息(脱敏信息)第二步 : 构造查询构造器 --- 涉及大量的查询条件 构造这些查询条件比较复杂 所以在业务层封装一个方法提供给控制层使用
+    @Override
+    public QueryWrapper<Picture> getQueryWrapper(PictureQueryRequest pictureQueryRequest) {
+        QueryWrapper<Picture> queryWrapper = new QueryWrapper<>();
+        if (pictureQueryRequest == null) {
+            return queryWrapper;
+        }
+        // 基础图片信息
+        Long id = pictureQueryRequest.getId();
+        String name = pictureQueryRequest.getName();
+        String introduction = pictureQueryRequest.getIntroduction();
+        String category = pictureQueryRequest.getCategory();
+        List<String> tags = pictureQueryRequest.getTags();
+        Long picSize = pictureQueryRequest.getPicSize();
+        Integer picWidth = pictureQueryRequest.getPicWidth();
+        Integer picHeight = pictureQueryRequest.getPicHeight();
+        Double picScale = pictureQueryRequest.getPicScale();
+        String picFormat = pictureQueryRequest.getPicFormat();
+        String searchText = pictureQueryRequest.getSearchText();
+        Long userId = pictureQueryRequest.getUserId();
+        // 排序
+        String sortField = pictureQueryRequest.getSortField();
+        String sortOrder = pictureQueryRequest.getSortOrder();
+        //审核信息提取
+        Integer reviewStatus = pictureQueryRequest.getReviewStatus();
+        String reviewMessage = pictureQueryRequest.getReviewMessage();
+        Long reviewerId = pictureQueryRequest.getReviewerId();
+        //空间信息提取
+        Long spaceId = pictureQueryRequest.getSpaceId();
+        boolean nullSpaceId = pictureQueryRequest.isNullSpaceId();
+        //时间查询条件
+        Date startEditTime = pictureQueryRequest.getStartEditTime();
+        Date endEditTime = pictureQueryRequest.getEndEditTime();
+
+
+        // 根据用户输入的 searchText 在多个字段（如 name 和 introduction）中进行模糊搜索，并将查询条件动态拼接到 QueryWrapper 中
+        // 从多字段中搜索
+        if (StrUtil.isNotBlank(searchText)) {
+            // 需要拼接查询条件
+            // and (name like "%xxx%" or introduction like "%xxx%")
+            queryWrapper.and(
+                    qw -> qw.like("name", searchText)
+                            .or()
+                            .like("introduction", searchText)
+            );
+        }
+
+        // 根据用户传入的 tags 列表，在 JSON 数组字段 tags 中进行模糊查询，并将查询条件动态拼接到 QueryWrapper 中
+        // JSON 数组查询
+        if (CollUtil.isNotEmpty(tags)) {
+            /* and (tag like "%\"Java\"%" and like "%\"Python\"%") */
+            for (String tag : tags) {
+                queryWrapper.like("tags", "\"" + tag + "\"");
+            }
+        }
+
+        queryWrapper.eq(ObjUtil.isNotEmpty(id), "id", id);
+        queryWrapper.eq(ObjUtil.isNotEmpty(userId), "userId", userId);
+        queryWrapper.like(StrUtil.isNotBlank(name), "name", name);
+        queryWrapper.like(StrUtil.isNotBlank(introduction), "introduction", introduction);
+        queryWrapper.like(StrUtil.isNotBlank(picFormat), "picFormat", picFormat);
+        queryWrapper.eq(StrUtil.isNotBlank(category), "category", category);
+        queryWrapper.eq(ObjUtil.isNotEmpty(picWidth), "picWidth", picWidth);
+        queryWrapper.eq(ObjUtil.isNotEmpty(picHeight), "picHeight", picHeight);
+        queryWrapper.eq(ObjUtil.isNotEmpty(picSize), "picSize", picSize);
+        queryWrapper.eq(ObjUtil.isNotEmpty(picScale), "picScale", picScale);
+        //查询构造器添加审核信息
+        queryWrapper.eq(ObjUtil.isNotEmpty(reviewStatus), "reviewStatus", reviewStatus);
+        queryWrapper.like(StrUtil.isNotBlank(reviewMessage), "reviewMessage", reviewMessage);
+        queryWrapper.eq(ObjUtil.isNotEmpty(reviewerId), "reviewerId", reviewerId);
+        //查询构造器添加空间信息信息
+        queryWrapper.eq(ObjUtil.isNotEmpty(spaceId), "spaceId", spaceId);
+        queryWrapper.isNull(nullSpaceId, "spaceId");
+        //时间查询条件
+        queryWrapper.ge(ObjUtil.isNotEmpty(startEditTime), "editTime", startEditTime);
+        queryWrapper.lt(ObjUtil.isNotEmpty(endEditTime), "editTime", endEditTime);
+        // 排序
+        queryWrapper.orderBy(StrUtil.isNotEmpty(sortField), sortOrder.equals("ascend"), sortField);
+
+
+        return queryWrapper;
+    }
+
+
+
+
+    //这里是页面分页显示图片信息(脱敏信息)第三步 : 将原图片分页对象转化为脱敏分页对象
     /**
      * 普通用户 : 获取脱敏分页对象
      * 其中处理了原信息分页对象中的数据picturePage.getxxx 1 基本分页显示信息与查询到的用户记录数--------创建了脱敏分页对象
@@ -553,8 +693,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         // 获取图片所对应的用户唯一的id集合(Set不允许重复元素)
         Set<Long> userIdSet = pictureList.stream().map(Picture::getUserId).collect(Collectors.toSet());
         // 1 => user1, 2 => user2
+        // 虽然我们的业务中一个ID对应一个User对象 , 但是groupingBy设计的方式就是一个ID可能对应多个User对象
+        // 所以我们后面需要.get(0)获取User对象
         Map<Long, List<User>> userIdUserListMap = userService.listByIds(userIdSet).stream()
                 .collect(Collectors.groupingBy(User::getId));
+
         //  2.2 遍历脱敏图片填充用户信息
         pictureVOList.forEach(pictureVO -> {
             Long userId = pictureVO.getUserId();//图片所属id
@@ -571,89 +714,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     }
 
 
-    //分页查询 涉及大量的查询条件 构造这些查询条件比较复杂 所以在业务层封装一个方法提供给控制层使用
-    @Override
-    public QueryWrapper<Picture> getQueryWrapper(PictureQueryRequest pictureQueryRequest) {
-        QueryWrapper<Picture> queryWrapper = new QueryWrapper<>();
-        if (pictureQueryRequest == null) {
-            return queryWrapper;
-        }
-        // 从对象中取值
-        Long id = pictureQueryRequest.getId();
-        String name = pictureQueryRequest.getName();
-        String introduction = pictureQueryRequest.getIntroduction();
-        String category = pictureQueryRequest.getCategory();
-        List<String> tags = pictureQueryRequest.getTags();
-        Long picSize = pictureQueryRequest.getPicSize();
-        Integer picWidth = pictureQueryRequest.getPicWidth();
-        Integer picHeight = pictureQueryRequest.getPicHeight();
-        Double picScale = pictureQueryRequest.getPicScale();
-        String picFormat = pictureQueryRequest.getPicFormat();
-        String searchText = pictureQueryRequest.getSearchText();
-        Long userId = pictureQueryRequest.getUserId();
-        String sortField = pictureQueryRequest.getSortField();
-        String sortOrder = pictureQueryRequest.getSortOrder();
-        //审核信息提取
-        Integer reviewStatus = pictureQueryRequest.getReviewStatus();
-        String reviewMessage = pictureQueryRequest.getReviewMessage();
-        Long reviewerId = pictureQueryRequest.getReviewerId();
-        //空间信息提取
-        Long spaceId = pictureQueryRequest.getSpaceId();
-        boolean nullSpaceId = pictureQueryRequest.isNullSpaceId();
-        //时间查询条件
-        Date startEditTime = pictureQueryRequest.getStartEditTime();
-        Date endEditTime = pictureQueryRequest.getEndEditTime();
-
-
-        // 从多字段中搜索
-        if (StrUtil.isNotBlank(searchText)) {
-            // 需要拼接查询条件
-            // and (name like "%xxx%" or introduction like "%xxx%")
-            queryWrapper.and(
-                    qw -> qw.like("name", searchText)
-                    .or()
-                    .like("introduction", searchText)
-            );
-        }
-        queryWrapper.eq(ObjUtil.isNotEmpty(id), "id", id);
-        queryWrapper.eq(ObjUtil.isNotEmpty(userId), "userId", userId);
-        queryWrapper.like(StrUtil.isNotBlank(name), "name", name);
-        queryWrapper.like(StrUtil.isNotBlank(introduction), "introduction", introduction);
-        queryWrapper.like(StrUtil.isNotBlank(picFormat), "picFormat", picFormat);
-        queryWrapper.eq(StrUtil.isNotBlank(category), "category", category);
-        queryWrapper.eq(ObjUtil.isNotEmpty(picWidth), "picWidth", picWidth);
-        queryWrapper.eq(ObjUtil.isNotEmpty(picHeight), "picHeight", picHeight);
-        queryWrapper.eq(ObjUtil.isNotEmpty(picSize), "picSize", picSize);
-        queryWrapper.eq(ObjUtil.isNotEmpty(picScale), "picScale", picScale);
-        //查询构造器添加审核信息
-        queryWrapper.eq(ObjUtil.isNotEmpty(reviewStatus), "reviewStatus", reviewStatus);
-        queryWrapper.like(StrUtil.isNotBlank(reviewMessage), "reviewMessage", reviewMessage);
-        queryWrapper.eq(ObjUtil.isNotEmpty(reviewerId), "reviewerId", reviewerId);
-        //查询构造器添加空间信息信息
-        queryWrapper.eq(ObjUtil.isNotEmpty(spaceId), "spaceId", spaceId);
-        queryWrapper.isNull(nullSpaceId, "spaceId");
-        //时间查询条件
-        queryWrapper.ge(ObjUtil.isNotEmpty(startEditTime), "editTime", startEditTime);
-        queryWrapper.lt(ObjUtil.isNotEmpty(endEditTime), "editTime", endEditTime);
-
-
-        // JSON 数组查询
-        if (CollUtil.isNotEmpty(tags)) {
-            /* and (tag like "%\"Java\"%" and like "%\"Python\"%") */
-            for (String tag : tags) {
-                queryWrapper.like("tags", "\"" + tag + "\"");
-            }
-        }
-        // 排序
-        queryWrapper.orderBy(StrUtil.isNotEmpty(sortField), sortOrder.equals("ascend"), sortField);
-        return queryWrapper;
-    }
 
     /**
      * 审核服务
-     *
-     * @param pictureReviewRequest
-     * @param loginUser
      */
     @Override
     public void doPictureReview(PictureReviewRequest pictureReviewRequest, User loginUser) {

@@ -45,29 +45,20 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-        // 日志记录当前方法调用的接口信息
-        log.info("拦截器触发，请求路径：{}，方法：{}", request.getRequestURI(), request.getMethod());
-        log.info("拦截器触发，请求路径：{}，方法：{}", request.getRequestURI(), request.getMethod());
-        log.info("拦截器触发，请求路径：{}，方法：{}", request.getRequestURI(), request.getMethod());
-        log.info("拦截器触发，请求路径：{}，方法：{}", request.getRequestURI(), request.getMethod());
-        log.info("拦截器触发，请求路径：{}，方法：{}", request.getRequestURI(), request.getMethod());
-        log.info("拦截器触发，请求路径：{}，方法：{}", request.getRequestURI(), request.getMethod());
-        log.info("拦截器触发，请求路径：{}，方法：{}", request.getRequestURI(), request.getMethod());
 
-        log.info("拦截器触发，请求路径：{}，方法：{}", request.getRequestURI(), request.getMethod());
-        String uri = request.getRequestURI();
-        if (uri.contains("/user/login")){
-            return true;
-        }
-//        log.info("请求路径：{}，token：{}", request.getRequestURI(), request.getHeader("Authorization"));
-         //放行 OPTIONS 请求
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             log.debug("放行 OPTIONS 请求");
             return true;
         }
+        String uri = request.getRequestURI();
+        if (uri.contains("/user/login") || uri.contains("/user/register")){
+            return true;
+        }
+//        log.info("请求路径：{}，token：{}", request.getRequestURI(), request.getHeader("Authorization"));
+         //放行 OPTIONS 请求
 
 
-        StringBuffer sb = new StringBuffer();
+
         // 这是什么神来之垃圾手  直接让我旋转起飞
         // 外面释放不让过 就在这里放行
         // 放行 /api/picture/tag_category","/api/picture/list/page/vo","/api/picture/list/page/vo/cache",三个接口
@@ -81,12 +72,8 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
 //        }
 
 
-        log.debug("{}", request.getRequestURI());
         // 1.获取请求头中的token
-        log.debug("从request获取token：{}", request.getHeader("Authorization"));
-
-
-
+        //log.debug("从request获取token：{}", request.getHeader("Authorization"));
         String token = request.getHeader("Authorization");
 
         if (StrUtil.isBlank(token)){
@@ -97,12 +84,8 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         // 2.基于TOKEN获取redis中的用户
         String key  = LOGIN_USER_KEY + token;
         log.info("keykeykeykey{}", key);
-        log.info("keykeykeykey{}", key);
-        log.info("keykeykeykey{}", key);
+
         Map<Object, Object> userMap = stringRedisTemplate.opsForHash().entries(key);
-        log.info("userMapuserMapuserMap{}", userMap);
-        log.info("userMapuserMapuserMap{}", userMap);
-        log.info("userMapuserMapuserMap{}", userMap);
         log.info("userMapuserMapuserMap{}", userMap);
         // 3.判断用户是否存在
         if (userMap.isEmpty()) {
@@ -113,25 +96,15 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         RedisUser redisUser = BeanUtil.fillBeanWithMap(userMap, new RedisUser(), false);
         // 6.存在，保存用户信息到 ThreadLocal 如此便获得了用户信息 之后的功能中若需要获取用户信息时 从ThreadLocal中获取就行
         UserHolder.saveUser(redisUser);
+        log.info("用户信息{}", redisUser);
 
-        log.info("用户信息{}", redisUser);
-        log.info("用户信息{}", redisUser);
-        log.info("用户信息{}", redisUser);
-        log.info("用户信息{}", redisUser);
-        log.info("用户信息{}", redisUser);
-        log.info("用户信息{}", redisUser);
-        log.info("用户信息{}", redisUser);
         // 7.刷新token有效期
         stringRedisTemplate.expire(key, LOGIN_USER_TTL, TimeUnit.MINUTES);
 
-
         log.info("请求路径：{}，获取到Token：{}", request.getRequestURI(), token);
         log.info("从Redis获取用户：{}", redisUser);
-        log.info("从UserHolder获取用户1：{}", UserHolder.getUser());
-        log.info("从UserHolder获取用户2：{}", UserHolder.getUser());
-        log.info("从UserHolder获取用户3：{}", UserHolder.getUser());
-        log.info("从UserHolder获取用户4：{}", UserHolder.getUser());
-        log.info("从UserHolder获取用户5：{}", UserHolder.getUser());
+        log.info("从UserHolder获取用户：{}", UserHolder.getUser());
+
 
         if (UserHolder.getUser() == null) {
             log.error("RedisUser 为空");

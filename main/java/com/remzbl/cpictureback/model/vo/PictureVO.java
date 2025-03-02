@@ -101,7 +101,7 @@ public class PictureVO implements Serializable {
     private Date updateTime;
 
     /**
-     * 创建用户信息
+     * 创建用户信息  可以用来显示该图片的一些用户的信息
      */
     private UserVO user;
 
@@ -138,16 +138,8 @@ public class PictureVO implements Serializable {
         }
         PictureVO pictureVO = new PictureVO();
         BeanUtils.copyProperties(picture, pictureVO);
-        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
-        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
-        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
-        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
-        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
-        log.info("pictureVO.getTags():" + JSONUtil.toList(picture.getTags(), String.class));
         // 类型不同，需要转换
         pictureVO.setTags(JSONUtil.toList(picture.getTags(), String.class));
-        // 日志记录标签转化为json格式的信息
-
         return pictureVO;
     }
 }

@@ -159,28 +159,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         //Object userObj = request.getSession().getAttribute(UserConstant.USER_LOGIN_STATE);
         RedisUser currentUser = UserHolder.getUser();
-        log.info("从UserHolder获取用户6：{}", UserHolder.getUser());
-        log.info("从UserHolder获取用户7：{}", UserHolder.getUser());
-        log.info("从UserHolder获取用户8：{}", UserHolder.getUser());
-        log.info("从UserHolder获取用户9：{}", UserHolder.getUser());
-        log.info("从UserHolder获取用户10：{}", UserHolder.getUser());
-
-        // 日志记录当前方法调用的父方法信息
-
-//        String zong = Thread.currentThread().getStackTrace()[2].getMethodName();
-//        String zong1 = Thread.currentThread().getStackTrace()[3].getMethodName();
-//        String zong2 = Thread.currentThread().getStackTrace()[4].getMethodName();
-//        log.info("尝试获取父信息：{}", zong);
-//        log.info("尝试获取父信息：{}", zong);
-//        log.info("尝试获取父信息：{}", zong);
-//        log.info("尝试获取父信息：{}", zong1);
-//        log.info("尝试获取父信息：{}", zong1);
-//        log.info("尝试获取父信息：{}", zong1);
-//        log.info("尝试获取父信息：{}", zong2);
-//        log.info("尝试获取父信息：{}", zong2);
-//        log.info("尝试获取父信息：{}", zong2);
-
-
 
 
 
@@ -256,6 +234,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
                         //列(数据库中字段)   请求传来的数据字段
 
             //普通的增删查改(查询数量) 可以利用baseMapper中提供的方法实现
+
         long count = this.baseMapper.selectCount(queryWrapper);
         ThrowUtils.throwIf(count > 0, ErrorCode.PARAMS_ERROR, "账号重复");
 
@@ -287,16 +266,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
     @Override
     public LoginUserVO userLogin(String userAccount, String userPassword, HttpServletRequest request) {
         // 1. 校验
-        /*if (StrUtil.hasBlank(userAccount, userPassword)) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
-        }
-        if (userAccount.length() < 4) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户账号错误");
-        }
-        if (userPassword.length() < 8) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户密码错误");
-        }*/
-
         ThrowUtils.throwIf(StrUtil.hasBlank(userAccount, userPassword), ErrorCode.PARAMS_ERROR, "参数不能为空");
         ThrowUtils.throwIf(userAccount.length() < 4, ErrorCode.PARAMS_ERROR, "用户账号错误");
         ThrowUtils.throwIf(userPassword.length() < 8, ErrorCode.PARAMS_ERROR, "用户密码过短");
@@ -312,7 +281,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         // 不存在，抛异常
         if (user == null) {
-            log.info("user login failed, userAccount cannot match userPassword");
+            log.info("登录失败");
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在或者密码错误");
         }
         // 4. 保存用户的登录态
@@ -321,7 +290,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         // 优化 : 使用redis存储用户信息
         // 7.1.随机生成token，作为登录令牌
         String token = UUID.randomUUID().toString(true);
-        // 7.2.将User对象转为HashMap存储
+        // 7.2.将RedisUser对象转为HashMap存储
         RedisUser redisUser = BeanUtil.copyProperties(user, RedisUser.class);
             //Map<String, Object> userMap = BeanUtil.beanToMap(redisUser);如果只是这样普通的转化 会导致下面redis存储发生类型转化错误
             //解决方法一 : 自己创建一个Map结构类 适配我们自己的redisUser中的字段
@@ -329,7 +298,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         Map<String, Object> userMap = BeanUtil.beanToMap(redisUser, new HashMap<>(),
                 CopyOptions.create()
                         .setIgnoreNullValue(true) // 忽略为空的字段
-                        .setFieldValueEditor((fieldName, fieldValue) -> fieldValue.toString()));// 设置值编辑器将key 与 都转为String类型
+                        .setFieldValueEditor((fieldName, fieldValue) -> fieldValue.toString()));// 设置值编辑器将值转化为String类型
 
         // 7.3.存储
         String tokenKey = LOGIN_USER_KEY + token;
@@ -343,8 +312,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
 
         loginUserVO.setToken(token);
 
-        log.info("用户登录成功，ID：{}，Token：{}，存储到Redis：{}",
-                redisUser.getId(), token, redisUser);
+        log.info("用户登录成功，ID：{}，Token：{}，存储到Redis：{}", redisUser.getId(), token, redisUser);
 
         return loginUserVO;
 

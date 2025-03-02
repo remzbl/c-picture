@@ -25,12 +25,7 @@ public class LoginInterceptor implements HandlerInterceptor {
             return false;
         }
         // 日志记录当前方法调用的接口信息
-
         log.info("拦截器2从UserHolder获取用户：{}", UserHolder.getUser());
-        log.info("拦截器2UserHolder获取用户：{}", UserHolder.getUser());
-        log.info("拦截器2UserHolder获取用户：{}", UserHolder.getUser());
-        log.info("拦截器2UserHolder获取用户：{}", UserHolder.getUser());
-        log.info("拦截器2UserHolder获取用户：{}", UserHolder.getUser());
         return true;
     }
 }

@@ -24,7 +24,7 @@ spring:
   redis:
     lettuce:
       pool:
-        max-active: 50  # 默认8，建议根据并发调整
+        max-active: 8  # 默认8，建议根据并发调整
         max-idle: 20
         min-idle: 5
     database: 0

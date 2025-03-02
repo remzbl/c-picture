@@ -185,6 +185,8 @@ public class PictureController {
         return ResultUtils.success(true);
     }
 
+    // 查
+
     /**
      * 根据 id 获取图片（仅管理员可用）
      */
@@ -296,8 +298,8 @@ public class PictureController {
         if (spaceId == null) {
             // 公开图库
             // 普通用户默认只能看到审核通过的数据
-            pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
-            pictureQueryRequest.setNullSpaceId(true);
+            pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue()); //审核信息
+            pictureQueryRequest.setNullSpaceId(true);								      //无空间id的图片--公共图库
 
 
         } else {
@@ -308,9 +310,6 @@ public class PictureController {
             if (!loginUser.getId().equals(space.getUserId())) {
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有空间权限");
             }
-
-
-
         }
         //ccccc
 
@@ -330,9 +329,12 @@ public class PictureController {
             return ResultUtils.success(cachedPage);
         }
 
-        // 本地缓存未命中  查询Redis分布式缓存
+        // 本地缓存未命中  查询Redis缓存
         ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue(); //构造操作redis数据库的对象
+
+
         cachedValue = valueOps.get(cacheKey); //redis查询 redisKey键所对应的值
+
         // 断点日志测试
         log.info("cachedValue:{}",cachedValue);
 
@@ -346,7 +348,7 @@ public class PictureController {
         // 创建原信息分页对象
         Page<Picture> picturePage = pictureService.page(new Page<>(current, size),
                 pictureService.getQueryWrapper(pictureQueryRequest));
-        // 获取原信息分页对象
+        // 获取脱敏信息分页对象
         Page<PictureVO> pictureVOPage = pictureService.getPictureVOPage(picturePage);
 
         // 存入 Redis 缓存
@@ -354,6 +356,8 @@ public class PictureController {
         // 5 - 10 分钟随机过期，防止雪崩
         int cacheExpireTime = 300 +  RandomUtil.randomInt(0, 300);
         valueOps.set(cacheKey, cacheValue, cacheExpireTime, TimeUnit.SECONDS);
+
+
 
         // 写入本地缓存
         cacheUtil.getLocalCache().put(cacheKey, cacheValue);
@@ -460,6 +464,9 @@ public class PictureController {
         return ResultUtils.success(pictureVOPage);
 
     }
+
+
+
 
 
     /**

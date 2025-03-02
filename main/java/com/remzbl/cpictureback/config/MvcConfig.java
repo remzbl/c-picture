@@ -17,10 +17,10 @@ public class MvcConfig implements WebMvcConfigurer {
     @Resource
     private StringRedisTemplate stringRedisTemplate;
 
-    @Autowired
+    @Resource
     RefreshTokenInterceptor refreshTokenInterceptor;
 
-    @Autowired
+    @Resource
     LoginInterceptor loginInterceptor;
 
     @Override
@@ -45,6 +45,8 @@ public class MvcConfig implements WebMvcConfigurer {
                         "/**/v2/api-docs",
 
                         //功能接口释放
+                        "/api/user/register",
+                        "/api/user/login",
                         "/api/picture/list/page/vo",
                         "/api/picture/list/page/vo/cache",
                         "/api/picture/get/vo",
@@ -89,18 +91,6 @@ public class MvcConfig implements WebMvcConfigurer {
 
 
                 );
-//                .excludePathPatterns(
-//                        "/api/health",
-//                        "/api/user/login",
-//                        "/api/user/register",
-//                        "/api/picture/tag_category",
-//                        "/api/picture/list/page/vo",
-//                        "/api/picture/list/page/vo/cache",
-//                        //"/api/picture/get/vo",
-//                        "/api/space/**",
-//                        "/api/space/list/level"
-//
-//                );
 
     }
 

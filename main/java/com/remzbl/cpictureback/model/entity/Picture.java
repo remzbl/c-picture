@@ -25,6 +25,11 @@ public class Picture implements Serializable {
     private String url;
 
     /**
+     *缩略图url
+     */
+    private String thumbnailUrl;
+
+    /**
      * 图片名称
      */
     private String name;
@@ -121,10 +126,7 @@ public class Picture implements Serializable {
      */
     private Date reviewTime;
 
-    /**
-     *缩略图url
-     */
-    private String thumbnailUrl;
+
 
 
 
