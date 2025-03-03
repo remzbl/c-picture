@@ -1,5 +1,6 @@
 package com.remzbl.cpictureback.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
@@ -10,6 +11,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.remzbl.cpictureback.api.aliyunai.AliYunAiApi;
 import com.remzbl.cpictureback.api.aliyunai.model.CreateOutPaintingTaskRequest;
 import com.remzbl.cpictureback.api.aliyunai.model.CreateOutPaintingTaskResponse;
+import com.remzbl.cpictureback.constant.UserConstant;
 import com.remzbl.cpictureback.exception.BusinessException;
 import com.remzbl.cpictureback.exception.ErrorCode;
 import com.remzbl.cpictureback.exception.ThrowUtils;
@@ -78,7 +80,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     private TransactionTemplate transactionTemplate;
 
     @Resource
-    private CacheUtil cacheCleanService;
+    private CacheUtil cacheService;
 
     @Resource
     private AliYunAiApi aliYunAiApi;
@@ -237,7 +239,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
         // 上传到数据库之前 补全图片信息
         //新功能 : 审核     补充审核参数
-        this.fillReviewParams(picture, loginUser);
+        if(pictureUploadRequest.getSpaceId() == null){
+            this.fillReviewParams(picture, loginUser);
+        }
+
 
         // 操作数据库
         // 如果 pictureId 不为空，表示更新，否则是新增
@@ -272,10 +277,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
         });
         // 清理缓存
-        // todo 优化同步更新缓存 而不是直接删除
         //cacheCleanService.cleanAllCache();
 
-        cacheCleanService.updateCacheAfterUpload(picture, pictureUploadRequest);
+        // 只有管理员在公共图库时同步更新缓存  以及   私人图库的操作会同步更新缓存
+        if(loginUser.getUserRole().equals(UserConstant.ADMIN_ROLE) || spaceId != null){
+            cacheService.updateCacheAfterUpload(picture, spaceId);
+        }
+
 
 
 
@@ -349,13 +357,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 break;
             }
         }
-
         // 清理缓存
-        // todo 优化同步更新缓存 而不是直接删除
-        // cacheCleanService.cleanAllCache();
-        // 同步更新缓存
-        cacheCleanService.cleanAllCache();
-
+        // 这里抓取的图片更新缓存复杂了 , 效率也不行 , 不如删除缓存
+        cacheService.cleanAllCache();
         return uploadCount;
     }
 
@@ -451,7 +455,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             });
         }
 
-        cacheCleanService.cleanAllCache();
+
+        if(oldPicture.getSpaceId() != null || loginUser.getUserRole().equals(UserConstant.ADMIN_ROLE)){
+            cacheService.updateCacheAfterDelete(pictureId, oldPicture.getSpaceId());
+        }
+
 
         // 异步清理文件
         this.clearPictureFile(oldPicture);
@@ -461,8 +469,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Override
     public void editPicture(PictureEditRequest pictureEditRequest, User loginUser) {
 
+
         // 在此处将实体类和 DTO 进行转换
         Picture picture = new Picture();
+
+        //
         BeanUtils.copyProperties(pictureEditRequest, picture);
         // 注意将 list 转为 string
         picture.setTags(JSONUtil.toJsonStr(pictureEditRequest.getTags()));
@@ -483,14 +494,24 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         checkPictureAuth(loginUser, oldPicture);
 
         // 补充审核参数
-        this.fillReviewParams(picture, loginUser);
+        if(picture.getSpaceId() == null){
+            this.fillReviewParams(picture, loginUser);
+        }
+
 
         // 操作数据库
         boolean result = this.updateById(picture);
-        // todo 优化同步更新缓存 而不是直接删除
-        cacheCleanService.cleanAllCache();
+        // 优化同步更新缓存
+        // cacheCleanService.cleanAllCache();
 
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+
+
+        if(oldPicture.getSpaceId() != null){
+            cacheService.updateCacheAfterEdit(pictureEditRequest, oldPicture.getSpaceId());
+
+        }
+
 
 
     }
@@ -537,8 +558,39 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         // 5. 操作数据库进行批量更新
         boolean result = this.updateBatchById(pictureList);
 
-        // todo 优化同步更新缓存 而不是直接删除
-        cacheCleanService.cleanAllCache();
+        // 批量改同步更新 完成
+        // cacheCleanService.cleanAllCache();
+
+        // 4. 更新分类和标签（原有逻辑）
+        pictureList.forEach(picture -> {
+            if (StrUtil.isNotBlank(category)) {
+                picture.setCategory(category);
+            }
+            if (CollUtil.isNotEmpty(tags)) {
+                picture.setTags(JSONUtil.toJsonStr(tags));
+            }
+        });
+
+
+
+
+        // 构建修改后的图片信息列表（用于更新缓存）
+        List<PictureVO> updatedPictures = pictureList.stream()
+                .map(picture -> {
+                    PictureVO vo = new PictureVO();
+                    BeanUtil.copyProperties(picture, vo);
+                    vo.setTags(JSONUtil.toList(picture.getTags(), String.class));  // 转换tags字段
+                    return vo;
+                })
+                .collect(Collectors.toList());
+
+        // 同步更新缓存
+        if (!updatedPictures.isEmpty() && spaceId != null) {
+
+            cacheService.updateCacheAfterBatchEdit(updatedPictures, spaceId);
+        }
+
+
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "批量编辑失败");
     }
 
@@ -749,6 +801,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
         boolean result = this.updateById(updatePicture);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
+
+        // todo 审核后同步更新缓存
+        // 审核通过后删除缓存 , 保持缓存与数据库数据同步
+        //cacheService.cleanAllCache();
     }
 
 

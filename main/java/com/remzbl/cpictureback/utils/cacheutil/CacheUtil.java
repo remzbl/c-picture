@@ -1,33 +1,31 @@
 package com.remzbl.cpictureback.utils.cacheutil;
 
-import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.lang.TypeReference;
-import cn.hutool.core.util.RandomUtil;
-import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.remzbl.cpictureback.model.dto.picture.PictureQueryRequest;
-import com.remzbl.cpictureback.model.dto.picture.PictureUploadByBatchRequest;
-import com.remzbl.cpictureback.model.dto.picture.PictureUploadRequest;
+import com.remzbl.cpictureback.model.dto.picture.PictureEditRequest;
 import com.remzbl.cpictureback.model.entity.Picture;
-import com.remzbl.cpictureback.model.entity.User;
-import com.remzbl.cpictureback.model.enums.PictureReviewStatusEnum;
 import com.remzbl.cpictureback.model.vo.PictureVO;
+import com.remzbl.cpictureback.service.impl.PictureServiceImpl;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.util.DigestUtils;
 
+import javax.annotation.Resource;
 import java.time.Duration;
-import java.util.ArrayList;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 // 配置本地缓存Caffeine
 // 实现一致性的第一种方法 (比较粗暴) : 上传图片后清理 本地缓存 与 redis缓存
@@ -37,6 +35,12 @@ import java.util.concurrent.TimeUnit;
 @Component
 @Data
 public class CacheUtil {
+
+
+    @Resource
+    public PictureServiceImpl pictureServiceImpl;
+
+
     // ====================== 常量配置 ======================
     private static final String REDIS_KEY_PATTERN = "cpicture:listPictureVOByPage:*"; // Redis缓存键前缀
     private static final String LOCAL_CACHE_PREFIX = "cpicture:listPictureVOByPage:"; // 本地缓存键前缀
@@ -50,6 +54,7 @@ public class CacheUtil {
             .maximumSize(10_000L)
             .expireAfterWrite(Duration.ofMinutes(5))
             .build();
+
 
     // ====================== 构造函数修正 ====================
 //    public CacheUtil(StringRedisTemplate stringRedisTemplate) {
@@ -91,144 +96,302 @@ public class CacheUtil {
     /**
      * 更新缓存（上传图片后清理缓存）
      * @param picture
-     * @param pictureUploadRequest
+     * @param spaceId
      */
-    public void updateCacheAfterUpload(Picture picture, PictureUploadRequest pictureUploadRequest) {
-        // 构建查询条件
-        PictureQueryRequest queryRequest = new PictureQueryRequest();
-        queryRequest.setSpaceId(picture.getSpaceId());
-        queryRequest.setCurrent(1); // 默认更新第一页缓存
-        queryRequest.setPageSize(10); // 默认每页10条
+    public void updateCacheAfterUpload(Picture picture, Long spaceId) {
 
 
-        // 生成缓存 Key
-        String queryCondition = JSONUtil.toJsonStr(queryRequest);
-        String hashKey = DigestUtils.md5DigestAsHex(queryCondition.getBytes());
-        String cacheKey = String.format("cpicture:listPictureVOByPage:%s", hashKey);
-
-        // 从缓存中获取数据
-        ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue();
-        String cachedValue = valueOps.get(cacheKey);
-
-        if (cachedValue != null) {
-            // 反序列化缓存数据
-            Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, Page.class);
-
-            // 将新图片插入到缓存数据中
-            PictureVO pictureVO = PictureVO.objToVo(picture);
-            List<PictureVO> records = cachedPage.getRecords();
-            records.add(0, pictureVO); // 将新图片插入到列表开头
-
-            // 测试缓存更新是否正常
-            log.info("更新缓存：{}", picture.getName());
-            log.info("更新缓存：{}", picture.getName());
-            log.info("更新缓存：{}", picture.getName());
-            log.info("更新缓存：{}", picture.getName());
-            log.info("更新缓存：{}", picture.getName());
-            log.info("更新缓存：{}", picture.getName());
+        // 获取cpicture:PrivatePage开通的缓存key
+        String pattern = "cpicture:PrivatePage*";
+        String PublicPattern = "cpicture:PublicPage*";
+        // 获取缓存中的key
+        Set<String> privateKeys = stringRedisTemplate.keys(pattern);
+        Set<String> publicKeys = stringRedisTemplate.keys(PublicPattern);
+        log.info("批量修改后需更新的私人图库缓存Key: {}", privateKeys);
+        log.info("批量修改后需更新的公共图库缓存Key: {}", publicKeys);
 
 
-            // 更新缓存
-            String updatedCacheValue = JSONUtil.toJsonStr(cachedPage);
-            valueOps.set(cacheKey, updatedCacheValue); // redis缓存更新
-            localCache.put(cacheKey, updatedCacheValue); // 本地缓存更新
-        }
-    }
+        if(spaceId != null){
+            // 私人图库缓存更新
+            for (String privatekey : privateKeys) {
+                if (privatekey.contains(String.valueOf(spaceId))) {
+                    // 获取缓存数据
+                    ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue();
+                    String cachedValue = valueOps.get(privatekey);
 
+                    if (cachedValue != null) {
+                        // 反序列化缓存数据
+                        Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, Page.class);
 
-    // 批量上传图片同步更新缓存
+                        // 将新图片插入到缓存数据中
+                        PictureVO pictureVO = PictureVO.objToVo(picture);
+                        cachedPage.getRecords().add(0, pictureVO);
+                        String updatedCacheValue = JSONUtil.toJsonStr(cachedPage);
+                        // redis缓存更新
+                        valueOps.set(privatekey, updatedCacheValue,
+                                10+ ThreadLocalRandom.current().nextInt(5), TimeUnit.MINUTES); // 随机过期时间，避免缓存雪崩
 
-    // region
-
-    public void updateCacheAfterBatchUpload(List<PictureVO> newPictures, Long spaceId) {
-        if (CollUtil.isEmpty(newPictures)) {
-            return;
-        }
-
-        // 构建可能影响的查询条件（按空间 ID 和时间倒序）
-        PictureQueryRequest queryRequest = new PictureQueryRequest();
-        queryRequest.setSpaceId(spaceId); // 如果是公共图库，spaceId 为 null
-        queryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
-
-
-        // 更新前 3 页缓存（根据业务场景调整）
-        for (int page = 1; page <= 3; page++) {
-            queryRequest.setCurrent(page);
-            queryRequest.setPageSize(10); // 需和原分页大小一致
-
-            // 生成缓存 Key
-            String queryJson = JSONUtil.toJsonStr(queryRequest);
-            String hashKey = DigestUtils.md5DigestAsHex(queryJson.getBytes());
-            String cacheKey = String.format("cpicture:listPictureVOByPage:%s", hashKey);
-
-            // 更新 Redis 缓存
-            updateRedisCache(cacheKey, newPictures);
-
-            // 更新本地缓存
-            updateLocalCache(cacheKey, newPictures);
-        }
-    }
-
-    public void updateRedisCache(String cacheKey, List<PictureVO> newPictures) {
-        ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue();
-        String cachedValue = valueOps.get(cacheKey);
-
-        if (StrUtil.isNotBlank(cachedValue)) {
-            // 反序列化分页数据
-            Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, new TypeReference<Page<PictureVO>>() {}, false);
-
-            // 将新图片插入到列表头部（按时间倒序）
-            List<PictureVO> updatedRecords = new ArrayList<>(newPictures);
-            updatedRecords.addAll(cachedPage.getRecords());
-
-            // 保持分页大小，移除超出部分
-            if (updatedRecords.size() > cachedPage.getSize()) {
-                updatedRecords = updatedRecords.subList(0, (int) cachedPage.getSize());
+                    }
+                }
             }
 
-            // 构建更新后的分页对象
-            Page<PictureVO> updatedPage = new Page<>(
-                    cachedPage.getCurrent(),
-                    cachedPage.getSize(),
-                    cachedPage.getTotal() + newPictures.size() // 更新总数
-            );
-            updatedPage.setRecords(updatedRecords);
+        // 公共图库缓存更新
+        }else{
+            for (String publicKey : publicKeys) {
+                // 获取缓存数据
+                ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue();
+                String cachedValue = valueOps.get(publicKey);
 
-            // 重新序列化并写入 Redis
-            String updatedValue = JSONUtil.toJsonStr(updatedPage);
-            valueOps.set(cacheKey, updatedValue, 300 + RandomUtil.randomInt(0, 300), TimeUnit.SECONDS);
-        }
-    }
+                if (cachedValue != null) {
+                    // 反序列化缓存数据（注意处理分页泛型问题）
+                    Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, new TypeReference<Page<PictureVO>>() {}, false);
 
-    public void updateLocalCache(String cacheKey, List<PictureVO> newPictures) {
-        Cache<String, String> localCache = this.getLocalCache();
-        String cachedValue = localCache.getIfPresent(cacheKey);
+                    // 将新图片插入到缓存数据首部
+                    PictureVO pictureVO = PictureVO.objToVo(picture);
+                    cachedPage.getRecords().add(0, pictureVO);
 
-        if (StrUtil.isNotBlank(cachedValue)) {
-            // 反序列化分页数据
-            Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, new TypeReference<Page<PictureVO>>() {}, false);
 
-            // 更新逻辑同 Redis
-            List<PictureVO> updatedRecords = new ArrayList<>(newPictures);
-            updatedRecords.addAll(cachedPage.getRecords());
-            if (updatedRecords.size() > cachedPage.getSize()) {
-                updatedRecords = updatedRecords.subList(0, (int) cachedPage.getSize());
+                    // 序列化并更新缓存（建议设置随机过期时间防雪崩）
+                    String updatedCacheValue = JSONUtil.toJsonStr(cachedPage);
+                    valueOps.set(publicKey, updatedCacheValue,
+                            10 + ThreadLocalRandom.current().nextInt(5), TimeUnit.MINUTES);
+                }
             }
 
-            Page<PictureVO> updatedPage = new Page<>(
-                    cachedPage.getCurrent(),
-                    cachedPage.getSize(),
-                    cachedPage.getTotal() + newPictures.size()
-            );
-            updatedPage.setRecords(updatedRecords);
 
-            // 写入本地缓存
-            localCache.put(cacheKey, JSONUtil.toJsonStr(updatedPage));
+        }
+
+
+
+
+    }
+
+
+    /**
+     * 更新缓存（编辑图片后清理缓存）
+     * @param pictureEditRequest
+     * @param spaceId
+     */
+    public void updateCacheAfterEdit(PictureEditRequest pictureEditRequest, Long spaceId) {
+
+        Long id = pictureEditRequest.getId();
+        String name = pictureEditRequest.getName();
+        String introduction = pictureEditRequest.getIntroduction();
+        String category = pictureEditRequest.getCategory();
+        List<String> tags = pictureEditRequest.getTags();
+
+        // 获取cpicture:PrivatePage开通的缓存key
+        String pattern = "cpicture:PrivatePage*";
+        // 获取本地缓存中的key
+
+        Set<String> privatekeys = stringRedisTemplate.keys(pattern);
+        log.info("私人图库redis所有的缓存Key:{}", privatekeys);
+
+        for (String privatekey : privatekeys) {
+            if (privatekey.contains(String.valueOf(spaceId))) {
+                // 获取缓存数据
+                ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue();
+                String cachedValue = valueOps.get(privatekey);
+
+                if (cachedValue != null) {
+                    // 反序列化缓存数据
+                    Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, new TypeReference<Page<PictureVO>>() {}, true);
+                    List<PictureVO> pictureVOList = cachedPage.getRecords();
+
+                    // 将新图片信息插入到缓存数据中
+
+
+                    for (PictureVO picturercord : pictureVOList) {
+                        if (picturercord.getId().equals(id)) {
+                            picturercord.setName(name);
+                            picturercord.setIntroduction(introduction);
+                            picturercord.setCategory(category);
+                            picturercord.setTags(tags);
+
+                        }
+                    }
+
+                    cachedPage.setRecords(pictureVOList);
+                    String updatedCacheValue = JSONUtil.toJsonStr(cachedPage);
+                    valueOps.set(privatekey, updatedCacheValue, 10, TimeUnit.MINUTES);// redis缓存更新
+
+                }
+            }
+        }
+
+    }
+
+    /**
+     * 批量修改图片后同步更新缓存
+     * @param updatedPictures 修改后的图片信息列表（需包含ID和新字段值）
+     * @param spaceId        空间ID（用于匹配缓存Key）
+     */
+    public void updateCacheAfterBatchEdit(List<PictureVO> updatedPictures, Long spaceId) {
+        // 匹配所有私人图库的缓存Key（例如："cpicture:PrivatePage*"）
+        String PrivatePattern = "cpicture:PrivatePage*";
+        Set<String> privateKeys = stringRedisTemplate.keys(PrivatePattern);
+        log.info("批量修改后需更新的缓存Key: {}", privateKeys);
+
+
+        // 提取所有被修改的图片ID（用于快速匹配）
+        Set<Long> updatedPictureIds = updatedPictures.stream()
+                .map(PictureVO::getId)
+                .collect(Collectors.toSet());
+
+        for (String privateKey : privateKeys) {
+            // 仅处理属于当前spaceId的缓存
+            if (privateKey.contains(String.valueOf(spaceId))) {
+                ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue();
+                String cachedValue = valueOps.get(privateKey);
+
+                if (cachedValue != null) {
+                    try {
+                        // 反序列化缓存的分页数据
+                        Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, new TypeReference<Page<PictureVO>>() {}, true);
+
+                        // 遍历缓存中的记录，更新被修改的图片
+                        List<PictureVO> updatedRecords = cachedPage.getRecords().stream()
+                                .map(record -> {
+                                    if (updatedPictureIds.contains(record.getId())) {
+                                        // 找到对应的修改后的图片信息
+                                        PictureVO updatedPicture = updatedPictures.stream()
+                                                .filter(p -> p.getId().equals(record.getId()))
+                                                .findFirst()
+                                                .orElse(null);
+                                        if (updatedPicture != null) {
+                                            // 更新字段（可根据需要选择部分字段）
+                                            record.setName(updatedPicture.getName());
+                                            record.setCategory(updatedPicture.getCategory());
+                                            record.setTags(updatedPicture.getTags());
+                                            record.setIntroduction(updatedPicture.getIntroduction());
+                                        }
+                                    }
+                                    return record;
+                                })
+                                .collect(Collectors.toList());
+
+                        // 更新分页数据
+                        cachedPage.setRecords(updatedRecords);
+
+                        // 序列化并更新缓存
+                        String updatedCacheValue = JSONUtil.toJsonStr(cachedPage);
+                        valueOps.set(privateKey, updatedCacheValue, 10, TimeUnit.MINUTES);
+                    } catch (Exception e) {
+                        log.error("批量修改后更新缓存失败，Key: {}", privateKey, e);
+                    }
+                }
+            }
         }
     }
 
 
-    // endregion
+    /**
+     * 删除图片后同步更新缓存
+     * @param pictureId 被删除的图片ID
+     * @param spaceId   空间ID（用于匹配缓存Key）
+     */
+    public void updateCacheAfterDelete(Long pictureId, Long spaceId) {
+        // 匹配所有私人图库的缓存Key（例如："cpicture:PrivatePage:*"）
+        String PrivatePattern = "cpicture:PrivatePage*";
+        String PublicPattern = "cpicture:PublicPage*";
+        Set<String> privateKeys = stringRedisTemplate.keys(PrivatePattern);
+        Set<String> publicKeys = stringRedisTemplate.keys(PublicPattern);
+        log.info("批量修改后需更新的缓存Key: {}", privateKeys);
+        log.info("批量修改后需更新的缓存Key: {}", publicKeys);
+
+        if( spaceId != null){
+            // 私有图库删除图片同步更新缓存
+            for (String privateKey : privateKeys) {
+                // 仅处理属于当前spaceId的缓存
+                if (privateKey.contains(String.valueOf(spaceId))) {
+                    ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue();
+                    String cachedValue = valueOps.get(privateKey);
+
+                    if (cachedValue != null) {
+                        try {
+                            // 反序列化缓存的分页数据
+                            Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, new TypeReference<Page<PictureVO>>() {}, true);
+
+                            // 过滤掉被删除的图片
+                            List<PictureVO> remainingRecords = cachedPage.getRecords().stream()
+                                    .filter(record -> !record.getId().equals(pictureId))
+                                    .collect(Collectors.toList());
+
+                            // 更新分页信息（总数减少）
+                            cachedPage.setRecords(remainingRecords);
+                            cachedPage.setTotal(cachedPage.getTotal() - 1);  // 总数减1
+
+                            // 序列化并更新缓存
+                            String updatedCacheValue = JSONUtil.toJsonStr(cachedPage);
+                            valueOps.set(privateKey, updatedCacheValue, 10, TimeUnit.MINUTES);
+                        } catch (Exception e) {
+                            log.error("更新缓存失败，Key: {}", privateKey, e);
+                        }
+                    }
+                }
+            }
+            // 管理员公共图库删除图片同步更新缓存
+        }else{
+            for (String publicKey : publicKeys) {
+                ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue();
+                String cachedValue = valueOps.get(publicKey);
+
+                if (cachedValue != null) {
+                    try {
+                        // 反序列化带泛型的分页数据
+                        Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, new TypeReference<Page<PictureVO>>() {}, true);
+
+                        // 流式处理删除目标图片（深拷贝避免污染原集合）
+                        List<PictureVO> remainingRecords = cachedPage.getRecords().stream()
+                                .filter(record -> !record.getId().equals(pictureId))
+                                .collect(Collectors.toList());
+
+                        // 更新分页信息（总数减少）
+                        cachedPage.setRecords(remainingRecords);
+                        cachedPage.setTotal(cachedPage.getTotal() - 1);  // 总数减1
+
+                        // 序列化并更新缓存
+                        String updatedCacheValue = JSONUtil.toJsonStr(cachedPage);
+                        valueOps.set(publicKey, updatedCacheValue, 10, TimeUnit.MINUTES);
+                    } catch (Exception e) {
+                        log.error("更新公共图库缓存失败，Key: {}", publicKey, e);
+                    }
+                }
+            }
+        }
+
+
+    }
+
+
+
+    // 批量上传图片同步更新缓存 取消
+
+
+
+    // 审核图片后定时批量获取已审核待开放的图片 将这些图片设为通过状态 ,同步更新缓存
+
+    //@Scheduled(cron = "59 59 23 * * ?")
+    public void releasePassPictureAndUpdateCache(){
+
+        QueryWrapper<Picture> queryWrapper = new QueryWrapper<>();
+        // 查询今日已审核的图片
+        queryWrapper.eq("review_status", 1)
+                .eq("review_message", "通过")
+                .ge("create_time", LocalDateTime.now().minusDays(1));
+
+        List<Picture> pictureList = pictureServiceImpl.list(queryWrapper);
+
+        // 遍历图片列表，更新状态为开放
+        for (Picture picture : pictureList) {
+            picture.setReviewStatus(3);
+            pictureServiceImpl.updateById(picture);
+        }
+
+
+    }
+
+
 
 
 

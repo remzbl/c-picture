@@ -119,21 +119,6 @@ public class PictureController {
         User loginUser = userService.getLoginUser();
         pictureService.deletePicture(deleteRequest.getId(), loginUser);
 
-        // 优化到service中
-//        Long id = deleteRequest.getId();
-//        // 判断是否存在
-//        Picture oldPicture = pictureService.getById(id);
-//        ThrowUtils.throwIf(oldPicture == null, ErrorCode.NOT_FOUND_ERROR);
-//        // 仅本人或者管理员可删除
-//        if (!oldPicture.getUserId().equals(loginUser.getId()) && !userService.isAdmin(loginUser)) {
-//            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
-//        }
-//        // 操作数据库
-//        boolean result = pictureService.removeById(id);
-//        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
-//
-//        // 同时清理对象存储中的图片资源
-//        pictureService.clearPictureFile(oldPicture);
 
         return ResultUtils.success(true);
     }
@@ -295,12 +280,20 @@ public class PictureController {
         // 设置查询条件
         // 空间权限校验 即校验查询图片是属于哪个空间
         Long spaceId = pictureQueryRequest.getSpaceId();
+        String cacheKey = null;
+
         if (spaceId == null) {
             // 公开图库
             // 普通用户默认只能看到审核通过的数据
-            pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.PASS.getValue()); //审核信息
+            pictureQueryRequest.setReviewStatus(PictureReviewStatusEnum.REVIEWEDWAITTOPASS.getValue()); //审核信息
             pictureQueryRequest.setNullSpaceId(true);								      //无空间id的图片--公共图库
 
+
+            // 构建缓存 key : 使用MD5将查询条件压缩为hashkey  再拼接项目前缀 组成cachekey
+
+            String queryCondition = JSONUtil.toJsonStr(pictureQueryRequest);
+            String hashKey = DigestUtils.md5DigestAsHex(queryCondition.getBytes());
+            cacheKey = String.format("cpicture:PublicPage:%s", hashKey);
 
         } else {
             // 私有空间
@@ -310,24 +303,51 @@ public class PictureController {
             if (!loginUser.getId().equals(space.getUserId())) {
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有空间权限");
             }
+
+
+            String queryCondition = JSONUtil.toJsonStr(pictureQueryRequest);
+            String hashKey = DigestUtils.md5DigestAsHex(queryCondition.getBytes());
+            cacheKey = String.format("cpicture:PrivatePage%s:%s",spaceId, hashKey);
+
+
         }
         //ccccc
 
+        log.info("图片查询请求信息{}", pictureQueryRequest);
+        log.info("图片查询请求信息{}", pictureQueryRequest);
+        log.info("图片查询请求信息{}", pictureQueryRequest);
+        log.info("图片查询请求信息{}", pictureQueryRequest);
+        log.info("图片查询请求信息{}", pictureQueryRequest);
+        log.info("图片查询请求信息{}", pictureQueryRequest);
 
         // 构建缓存 key : 使用MD5将查询条件压缩为hashkey  再拼接项目前缀 组成cachekey
-        String queryCondition = JSONUtil.toJsonStr(pictureQueryRequest);
-        String hashKey = DigestUtils.md5DigestAsHex(queryCondition.getBytes());
-        String cacheKey = String.format("cpicture:listPictureVOByPage:%s", hashKey);
+//        String queryCondition = JSONUtil.toJsonStr(pictureQueryRequest);
+//        String hashKey = DigestUtils.md5DigestAsHex(queryCondition.getBytes());
+//        String cacheKey = String.format("cpicture:listPictureVOByPage:%s", hashKey);
 
-        // 1. 先从本地缓存中查询
-        String cachedValue = cacheUtil.getLocalCache().getIfPresent(cacheKey);
-        // 断点日志测试
-        log.info("cachedValue:{}",cachedValue);
-        if (cachedValue!= null) {
-            // 如果缓存命中，返回结果
-            Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, Page.class);
-            return ResultUtils.success(cachedPage);
-        }
+        log.info("查询时构建的redis缓存Key:{}", cacheKey);
+        log.info("查询时构建的redis缓存Key:{}", cacheKey);
+        log.info("查询时构建的redis缓存Key:{}", cacheKey);
+        log.info("查询时构建的redis缓存Key:{}", cacheKey);
+        log.info("查询时构建的redis缓存Key:{}", cacheKey);
+
+        String cachedValue = null;
+
+//        // 1. 先从本地缓存中查询
+//        String cachedValue = cacheUtil.getLocalCache().getIfPresent(cacheKey);
+//        // 断点日志测试
+//
+//        if (cachedValue!= null) {
+//            // 如果缓存命中，返回结果
+//            log.info("命中本地缓存cachedValue:{}",cachedValue);
+//            log.info("命中本地缓存cachedValue:{}",cachedValue);
+//            log.info("命中本地缓存cachedValue:{}",cachedValue);
+//            log.info("命中本地缓存cachedValue:{}",cachedValue);
+//            log.info("命中本地缓存cachedValue:{}",cachedValue);
+//
+//            Page<PictureVO> cachedPage = JSONUtil.toBean(cachedValue, Page.class);
+//            return ResultUtils.success(cachedPage);
+//        }
 
         // 本地缓存未命中  查询Redis缓存
         ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue(); //构造操作redis数据库的对象
@@ -336,7 +356,11 @@ public class PictureController {
         cachedValue = valueOps.get(cacheKey); //redis查询 redisKey键所对应的值
 
         // 断点日志测试
-        log.info("cachedValue:{}",cachedValue);
+        log.info("命中Redis缓存cachedValue:{}",cachedValue);
+        log.info("命中Redis缓存cachedValue:{}",cachedValue);
+        log.info("命中Redis缓存cachedValue:{}",cachedValue);
+        log.info("命中Redis缓存cachedValue:{}",cachedValue);
+        log.info("命中Redis缓存cachedValue:{}",cachedValue);
 
         if (cachedValue != null) {
             // 如果缓存命中，返回结果
@@ -383,6 +407,11 @@ public class PictureController {
         // 设置查询条件
         // 空间权限校验 即校验查询图片是属于哪个空间
         Long spaceId = pictureQueryRequest.getSpaceId();
+
+
+
+        String cacheKey = null;
+
         if (spaceId == null) {
             // 公开图库
             // 普通用户默认只能看到审核通过的数据
@@ -392,14 +421,6 @@ public class PictureController {
 
         } else {
             // 私有空间
-//            log.info("从UserHolder获取用户：{}", UserHolder.getUser());
-//            log.info("从UserHolder获取用户：{}", UserHolder.getUser());
-//            log.info("从UserHolder获取用户：{}", UserHolder.getUser());
-//            log.info("从UserHolder获取用户：{}", UserHolder.getUser());
-//            log.info("从UserHolder获取用户：{}", UserHolder.getUser());
-//            RedisUser currentUser = UserHolder.getUser();
-//            Long loginUser= currentUser.getId();
-
             User loginUser = userService.getLoginUser();
             Space space = spaceService.getById(spaceId);
             ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR, "空间不存在");
@@ -408,20 +429,12 @@ public class PictureController {
             }
 
 
-//            if (!loginUser.getId().equals(space.getUserId())) {
-//                throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "没有空间权限");
-//            }
-
-
 
         }
         //ccccc
 
 
-        // 构建缓存 key : 使用MD5将查询条件压缩为hashkey  再拼接项目前缀 组成cachekey
-        String queryCondition = JSONUtil.toJsonStr(pictureQueryRequest);
-        String hashKey = DigestUtils.md5DigestAsHex(queryCondition.getBytes());
-        String cacheKey = String.format("cpicture:listPictureVOByPage:%s", hashKey);
+
 
         // 1. 先从本地缓存中查询
         String cachedValue = cacheUtil.getLocalCache().getIfPresent(cacheKey);
@@ -437,6 +450,9 @@ public class PictureController {
         ValueOperations<String, String> valueOps = stringRedisTemplate.opsForValue(); //构造操作redis数据库的对象
         cachedValue = valueOps.get(cacheKey); //redis查询 redisKey键所对应的值
         // 断点日志测试
+        log.info("cachedValue:{}",cachedValue);
+        log.info("cachedValue:{}",cachedValue);
+        log.info("cachedValue:{}",cachedValue);
         log.info("cachedValue:{}",cachedValue);
 
         if (cachedValue != null) {
@@ -524,6 +540,19 @@ public class PictureController {
         pictureService.doPictureReview(pictureReviewRequest, loginUser);
         return ResultUtils.success(true);
     }
+
+    /**
+     * 点击触发已审核待开放的图片 开放
+     */
+    @PostMapping("/open")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Boolean> openPicture() {
+
+        cacheUtil.releasePassPictureAndUpdateCache();
+        return ResultUtils.success(true);
+
+    }
+
 
 
 
