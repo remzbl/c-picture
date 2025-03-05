@@ -54,6 +54,11 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
         if (uri.contains("/user/login") || uri.contains("/user/register")){
             return true;
         }
+
+        if (uri.contains("list/page/vo/cache")){
+            return true;
+        }
+
 //        log.info("请求路径：{}，token：{}", request.getRequestURI(), request.getHeader("Authorization"));
          //放行 OPTIONS 请求
 
@@ -110,6 +115,8 @@ public class RefreshTokenInterceptor implements HandlerInterceptor {
             log.error("RedisUser 为空");
             return false;
         }
+
+
         // 8.放行
         return true;
     }

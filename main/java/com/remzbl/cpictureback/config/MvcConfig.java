@@ -71,23 +71,18 @@ public class MvcConfig implements WebMvcConfigurer {
                         "/api/picture/edit",
                         "/api/picture/update",
                         "/api/picture/get/vo",
-                        "/api/picture/list/page/vo",
-                        "/api/picture/list/page/vo/cache",
-                        "/api/picture/list/page/vo/privatecache",
+//                        "/api/picture/list/page/vo",
+//                        "/api/picture/list/page/vo/cache",
+//                        "/api/picture/list/page/vo/privatecache",
                         "/api/picture/review",
-
-
 
                         "/api/space/add",
                         "/api/space/delete",
                         "/api/space/edit",
 
-
                         "/api/user/get/login",
                         "/api/space/add",
                         "/api/space/add"
-
-
 
 
                 );

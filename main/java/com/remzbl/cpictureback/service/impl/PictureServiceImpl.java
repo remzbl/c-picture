@@ -111,10 +111,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Override
     public void fillReviewParams(Picture picture, User loginUser) {
         if (userService.isAdmin(loginUser)) {
-            // 管理员自动过审
-            picture.setReviewStatus(PictureReviewStatusEnum.PASS.getValue());
+            // 管理员自动过审且开放图片
+            picture.setReviewStatus(PictureReviewStatusEnum.REVIEWEDWAITTOPASS.getValue());
             picture.setReviewerId(loginUser.getId());
-            picture.setReviewMessage("管理员自动过审");
+            picture.setReviewMessage("管理员自动开放");
             picture.setReviewTime(new Date());
         } else {
             // 非管理员，无论是编辑还是创建默认都是待审核
@@ -276,17 +276,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             return picture;
 
         });
-        // 清理缓存
-        //cacheCleanService.cleanAllCache();
-
         // 只有管理员在公共图库时同步更新缓存  以及   私人图库的操作会同步更新缓存
-        if(loginUser.getUserRole().equals(UserConstant.ADMIN_ROLE) || spaceId != null){
-            cacheService.updateCacheAfterUpload(picture, spaceId);
-        }
-
-
-
-
+        // 每次上传图片后, 都会编辑图片 , 所以这里不需要再更新缓存了 , 在编辑图片时更新缓存就可以了
+//        if(loginUser.getUserRole().equals(UserConstant.ADMIN_ROLE) || spaceId != null){
+//            cacheService.updateCacheAfterUpload(picture, uploadPictureResult);
+//        }
         return PictureVO.objToVo(picture);
     }
 
@@ -359,7 +353,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
         // 清理缓存
         // 这里抓取的图片更新缓存复杂了 , 效率也不行 , 不如删除缓存
-        cacheService.cleanAllCache();
+        //cacheService.cleanAllCache();
         return uploadCount;
     }
 
@@ -423,6 +417,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      */
     @Override
     public void deletePicture(Long pictureId, User loginUser) {
+        Long userId = loginUser.getId();
+        String deleteLock = String.valueOf(userId).intern();
+
         ThrowUtils.throwIf(pictureId <= 0, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(loginUser == null, ErrorCode.NO_AUTH_ERROR);
         // 判断是否存在
@@ -456,9 +453,13 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         }
 
 
-        if(oldPicture.getSpaceId() != null || loginUser.getUserRole().equals(UserConstant.ADMIN_ROLE)){
-            cacheService.updateCacheAfterDelete(pictureId, oldPicture.getSpaceId());
+        synchronized (deleteLock){
+            if(oldPicture.getSpaceId() != null || loginUser.getUserRole().equals(UserConstant.ADMIN_ROLE)){
+                cacheService.updateCacheAfterDelete(pictureId, oldPicture.getSpaceId());
+            }
+
         }
+
 
 
         // 异步清理文件
@@ -468,6 +469,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     //改
     @Override
     public void editPicture(PictureEditRequest pictureEditRequest, User loginUser) {
+        Long userId = loginUser.getId();
+        String editLock = String.valueOf(userId).intern();
+        int uploadFile = pictureEditRequest.getUploadFile();
+
+
 
 
         // 在此处将实体类和 DTO 进行转换
@@ -507,10 +513,19 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
 
 
+
+        // 私有图库直接更新缓存 , 对于私有图库 图片缓存不是共享的 , 所以无需加锁
         if(oldPicture.getSpaceId() != null){
-            cacheService.updateCacheAfterEdit(pictureEditRequest, oldPicture.getSpaceId());
+            cacheService.updateCacheAfterEdit(pictureEditRequest, oldPicture.getSpaceId() ,uploadFile);
+        }else{
+            // 公共图库的缓存更新需要加锁 , 因为公共图库的缓存是共享的 ,
+            // 当多个管理员进行修改图片时 会出现缓存不一致的情况 , 所以需要串行执行
+            synchronized (editLock){
+                cacheService.updateCacheAfterEdit(pictureEditRequest, oldPicture.getSpaceId() ,uploadFile);
+            }
 
         }
+
 
 
 
@@ -557,6 +572,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         fillPictureWithNameRule(pictureList, nameRule);
         // 5. 操作数据库进行批量更新
         boolean result = this.updateBatchById(pictureList);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "批量编辑失败");
 
         // 批量改同步更新 完成
         // cacheCleanService.cleanAllCache();
@@ -585,13 +601,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 .collect(Collectors.toList());
 
         // 同步更新缓存
-        if (!updatedPictures.isEmpty() && spaceId != null) {
-
-            cacheService.updateCacheAfterBatchEdit(updatedPictures, spaceId);
+        if (spaceId != null) {
+            cacheService.updateCacheAfterBatchEdit(pictureEditByBatchRequest, spaceId);
         }
 
 
-        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "批量编辑失败");
+
     }
 
     //批量改工具 - 名称批量修改

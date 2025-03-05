@@ -37,6 +37,12 @@ public class PictureEditRequest implements Serializable {
      */
     private List<String> tags;
 
+    /**
+     * 判断是否为上传文件后的编辑图片信息
+     */
+    private int uploadFile;   // 1 为上传文件后的编辑图片信息
+                              // 2 为直接编辑图片信息
+
 
 
     private static final long serialVersionUID = 1L;
